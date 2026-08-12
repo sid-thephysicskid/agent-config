@@ -1,89 +1,100 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 1040" role="img" aria-labelledby="title desc">
-  <title id="title">How instructions, skills, tools, and guardrails fit into an agent loop</title>
-  <desc id="desc">Durable sources feed a finite context. The model proposes a tool call. A pre-tool guard either blocks it with a safer route or allows the host to execute it. Tool output returns to the next turn.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 650" role="img" aria-labelledby="title desc">
+  <title id="title">One coding-agent turn, from request to action</title>
+  <desc id="desc">A request, repository, shared instructions, and one selected skill form the model's context. The model proposes a tool call. A host adapter translates it into one common shape. The guard either blocks it with a safer route or allows the tool to run. Clone, npm, and plugins only deliver these files.</desc>
   <defs>
-    <marker id="navy-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0 0 10 5 0 10z" fill="#0b2940"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 10 5 0 10z" fill="#16384d"/>
     </marker>
-    <marker id="red-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0 0 10 5 0 10z" fill="#c83832"/>
+    <marker id="stop-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 10 5 0 10z" fill="#b7352f"/>
     </marker>
     <style>
-      .heading { font: 700 28px ui-sans-serif, system-ui, sans-serif; fill: #0b2940; }
-      .label { font: 650 23px ui-sans-serif, system-ui, sans-serif; fill: #0b2940; }
-      .body { font: 500 19px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
-      .note { font: 500 17px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
-      .box { fill: #fffaf0; stroke: #0b2940; stroke-width: 2.5; }
-      .source { fill: #e8f0f2; stroke: #6c8796; stroke-width: 2; }
-      .line { fill: none; stroke: #0b2940; stroke-width: 4; marker-end: url(#navy-arrow); }
+      .title { font: 750 30px ui-sans-serif, system-ui, sans-serif; fill: #102f43; }
+      .step { font: 750 21px ui-sans-serif, system-ui, sans-serif; fill: #102f43; }
+      .body { font: 500 17px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
+      .small { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
+      .tiny { font: 600 14px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
+      .box { fill: #fffaf0; stroke: #16384d; stroke-width: 2.5; }
+      .input { fill: #e4eef0; stroke: #6f8895; stroke-width: 2; }
+      .line { fill: none; stroke: #16384d; stroke-width: 4; marker-end: url(#arrow); }
     </style>
   </defs>
 
-  <rect width="640" height="1040" rx="22" fill="#f4ecd9"/>
-  <text x="32" y="48" class="heading">Durable sources</text>
-  <text x="32" y="76" class="note">Loaded only when the host chooses to use them</text>
+  <rect width="1120" height="650" rx="26" fill="#f4ecd9"/>
+  <text x="44" y="54" class="title">One agent turn, from request to action</text>
+  <text x="44" y="84" class="body">The model thinks. Tools act. The guard checks the handoff between them.</text>
 
-  <g transform="translate(32 104)">
-    <rect class="source" width="276" height="92" rx="11"/>
-    <text x="18" y="35" class="label">Instructions</text>
-    <text x="18" y="66" class="body">AGENTS.md · CLAUDE.md</text>
-  </g>
-  <g transform="translate(332 104)">
-    <rect class="source" width="276" height="92" rx="11"/>
-    <text x="18" y="35" class="label">Skills</text>
-    <text x="18" y="66" class="body">One selected playbook</text>
-  </g>
-  <g transform="translate(32 216)">
-    <rect class="source" width="276" height="92" rx="11"/>
-    <text x="18" y="35" class="label">Repository</text>
-    <text x="18" y="66" class="body">Code · tests · docs</text>
-  </g>
-  <g transform="translate(332 216)">
-    <rect width="276" height="92" rx="11" fill="#f4ecd9" stroke="#6c8796" stroke-width="2" stroke-dasharray="8 7"/>
-    <text x="18" y="35" class="label">Host memory</text>
-    <text x="18" y="66" class="body">Optional, host-dependent</text>
+  <g transform="translate(44 126)">
+    <rect class="box" width="258" height="290" rx="16"/>
+    <text x="22" y="39" class="step">1 · Context</text>
+    <text x="22" y="68" class="body">What the model can see now</text>
+
+    <rect class="input" x="22" y="92" width="214" height="39" rx="8"/>
+    <text x="38" y="117" class="small">Your request</text>
+    <rect class="input" x="22" y="142" width="214" height="39" rx="8"/>
+    <text x="38" y="167" class="small">Relevant repository files</text>
+    <rect class="input" x="22" y="192" width="214" height="39" rx="8"/>
+    <text x="38" y="217" class="small">Shared house rules</text>
+    <rect x="22" y="242" width="214" height="39" rx="8" fill="#f8dfaa" stroke="#a26b16" stroke-width="2"/>
+    <text x="38" y="267" class="small">One selected skill</text>
   </g>
 
-  <path class="line" d="M170 308v42h150v30"/>
-  <path class="line" d="M470 308v42H320"/>
+  <path class="line" d="M302 271h62"/>
 
-  <g transform="translate(52 380)">
-    <rect class="box" width="536" height="126" rx="14"/>
-    <text x="24" y="39" class="label">Agent host builds finite context</text>
-    <text x="24" y="73" class="body">Request + selected instructions + relevant files</text>
-    <text x="24" y="102" class="note">Older material may be summarized or dropped.</text>
+  <g transform="translate(364 168)">
+    <rect class="box" width="178" height="206" rx="89"/>
+    <path d="M61 83c0-27 18-47 43-47 24 0 43 18 43 41 0 13-6 25-16 33v29H75v-29c-9-7-14-16-14-27z" fill="#e4eef0" stroke="#16384d" stroke-width="3"/>
+    <path d="M82 81c8-12 30-12 39 0M84 101h37M88 121h29" fill="none" stroke="#16384d" stroke-width="3" stroke-linecap="round"/>
+    <text x="89" y="171" text-anchor="middle" class="step">2 · Model</text>
+    <text x="89" y="194" text-anchor="middle" class="tiny">Chooses the next action</text>
   </g>
 
-  <path class="line" d="M320 506v54"/>
-  <g transform="translate(52 560)">
-    <rect class="box" width="536" height="104" rx="14"/>
-    <text x="24" y="40" class="label">Model proposes a tool call</text>
-    <text x="24" y="74" class="body">The model asks. The host controls execution.</text>
+  <path class="line" d="M542 271h62"/>
+
+  <g transform="translate(604 148)">
+    <rect class="box" width="202" height="246" rx="16"/>
+    <text x="20" y="39" class="step">3 · Adapter</text>
+    <text x="20" y="67" class="body">A plug converter</text>
+    <rect class="input" x="20" y="91" width="162" height="43" rx="8"/>
+    <text x="101" y="118" text-anchor="middle" class="small">Claude event</text>
+    <rect class="input" x="20" y="144" width="162" height="43" rx="8"/>
+    <text x="101" y="171" text-anchor="middle" class="small">Codex event</text>
+    <path d="M101 187v22" stroke="#16384d" stroke-width="3"/>
+    <path d="M88 204l13 13 13-13" fill="none" stroke="#16384d" stroke-width="3"/>
+    <text x="101" y="233" text-anchor="middle" class="tiny">One common shape</text>
   </g>
 
-  <path class="line" d="M320 664v54"/>
-  <g transform="translate(128 718)">
-    <rect width="384" height="104" rx="14" fill="#fffaf0" stroke="#c58a24" stroke-width="3"/>
-    <text x="24" y="40" class="label">Pre-tool guard</text>
-    <text x="24" y="74" class="body">Inspect before the tool can run</text>
+  <path class="line" d="M806 271h62"/>
+
+  <g transform="translate(868 168)">
+    <rect width="208" height="206" rx="16" fill="#fffaf0" stroke="#a26b16" stroke-width="3"/>
+    <path d="M104 34l47 18v40c0 35-19 59-47 76-28-17-47-41-47-76V52z" fill="#f8dfaa" stroke="#a26b16" stroke-width="3"/>
+    <path d="M84 91l14 14 29-34" fill="none" stroke="#16384d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="104" y="173" text-anchor="middle" class="step">4 · Guard</text>
+    <text x="104" y="196" text-anchor="middle" class="tiny">Checks before execution</text>
   </g>
 
-  <path d="M128 770H70v86" fill="none" stroke="#c83832" stroke-width="4" marker-end="url(#red-arrow)"/>
-  <path class="line" d="M512 770h58v86"/>
+  <path d="M972 374v55H818v47" fill="none" stroke="#b7352f" stroke-width="4" marker-end="url(#stop-arrow)"/>
+  <path d="M972 374v55h64v47" fill="none" stroke="#16384d" stroke-width="4" marker-end="url(#arrow)"/>
 
-  <g transform="translate(32 856)">
-    <rect width="276" height="106" rx="13" fill="#f8e4dc" stroke="#c83832" stroke-width="2.5"/>
-    <text x="20" y="40" class="label">Block</text>
-    <text x="20" y="72" class="body">Explain why and give</text>
-    <text x="20" y="96" class="body">a safer route</text>
+  <g transform="translate(710 476)">
+    <rect width="216" height="84" rx="13" fill="#f8e2dc" stroke="#b7352f" stroke-width="2.5"/>
+    <text x="18" y="34" class="step" fill="#8e241f">Block</text>
+    <text x="18" y="61" class="body">Explain a safer route</text>
   </g>
-  <g transform="translate(332 856)">
-    <rect class="box" width="276" height="106" rx="13"/>
-    <text x="20" y="40" class="label">Tool runs</text>
-    <text x="20" y="72" class="body">Git · files · database</text>
-    <text x="20" y="96" class="body">API · browser</text>
+  <g transform="translate(944 476)">
+    <rect class="box" width="132" height="84" rx="13"/>
+    <text x="66" y="34" text-anchor="middle" class="step">Tool runs</text>
+    <text x="66" y="61" text-anchor="middle" class="tiny">Git · DB · files</text>
   </g>
 
-  <path d="M470 962v42H20V443h32" fill="none" stroke="#0b2940" stroke-width="3.5" stroke-dasharray="9 8" marker-end="url(#navy-arrow)"/>
-  <text x="210" y="1024" class="note">Output returns to the next turn</text>
+  <g transform="translate(44 474)">
+    <rect width="586" height="112" rx="15" fill="#16384d"/>
+    <text x="22" y="38" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="750" fill="#fffaf0">Clone · npm · plugin</text>
+    <text x="22" y="70" font-family="ui-sans-serif, system-ui, sans-serif" font-size="17" font-weight="500" fill="#dce9ec">These are delivery boxes. They put the files in the right place.</text>
+    <text x="22" y="95" font-family="ui-sans-serif, system-ui, sans-serif" font-size="17" font-weight="500" fill="#dce9ec">They do not add another brain or another workflow.</text>
+  </g>
+
+  <path d="M1010 560v42H453V374" fill="none" stroke="#16384d" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrow)"/>
+  <text x="675" y="624" class="small">Tool output returns to the next turn</text>
 </svg>
