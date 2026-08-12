@@ -1,0 +1,4 @@
+interface:
+  display_name: "Setup"
+  short_description: "Adopt a repo's tracker, verification, and CI"
+  default_prompt: "Use $setup to adopt this existing repository into a clear, verifiable workflow."

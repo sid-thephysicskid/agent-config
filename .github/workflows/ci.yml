@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The guard is the product, so every gate that proves it works runs on every
+# change. None of these need network or secrets.
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: guard rules
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # install.sh refuses anything below 3.8; 3.9 is the oldest runner
+        # GitHub still offers, so it is the oldest this can prove. 3.13 catches
+        # anything the newer parser rejects. If either breaks, an adopter breaks.
+        python: ["3.9", "3.13"]
+    steps:
+      # Actions are pinned to a commit SHA, not a tag. A tag is mutable: whoever
+      # controls the action can move it, and this repo's whole job is guarding
+      # what runs. The trailing comment is the version the SHA corresponds to.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      # --no-perf on CI: the wall-clock budgets flake on a shared runner and
+      # say nothing about correctness. The big-instance DoS shapes still run
+      # in the dedicated job below, where a failure means something.
+      - name: rule suite
+        run: python3 hooks/tests.py --no-perf
+
+      - name: floor suite
+        run: python3 hooks/floor.py
+
+      # The layer a defect silently disables everything behind.
+      - name: adapter suite
+        run: python3 tests/adapters.py
+
+      - name: Codex hook merge
+        run: python3 tests/test_install_codex_hooks.py
+
+      - name: Claude settings merge
+        run: python3 tests/test_install_settings.py
+
+      - name: release metadata
+        run: python3 tests/test_release_metadata.py
+
+      - name: npm CLI
+        run: python3 tests/test_npx_cli.py
+
+      - name: project agent initializer
+        run: python3 tests/test_agent_init.py
+
+      - name: wizard tests
+        run: python3 operator-skills/wizard/tests/test_wizard.py
+
+      # Two different jobs. test_harness.py proves the CHECKS work, by feeding
+      # each one an input it must reject and an input it must pass. run_evals.py
+      # points those checks at the skills themselves. Running only the first
+      # means the harness verifies itself and never the product, which is how
+      # two orphaned skills sat in the output of every local run unnoticed.
+      - name: eval harness self-test
+        run: python3 evals/test_harness.py
+
+      - name: skills evals
+        run: python3 evals/run_evals.py
+
+      # These scored the compliance harness's own output and no gate ran them,
+      # which is how 706 lines of tests rot unobserved next to a result that
+      # had to be withdrawn. Three seconds.
+      - name: compliance metrics tests
+        run: python3 evals/compliance/test_metrics.py
+
+      - name: compliance session tests
+        run: python3 evals/compliance/test_session.py
+
+      # Fails on an UNTRIAGED leak only: a known one carries a written reason.
+      - name: red team corpus
+        run: python3 evals/redteam.py evals/redteam-candidates.txt
+
+  performance:
+    name: DoS budgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+      # Five fail-open DoS bugs so far, each quadratic work on a shape nobody
+      # had a big instance of. A hung hook fails OPEN, so this is a safety
+      # gate, not a speed one. Runs alone so it is not competing for the runner.
+      - name: full suite including wall-clock budgets
+        run: python3 hooks/tests.py
+
+  # Linux only. macOS runners bill at 10x and this suite takes ~16 minutes
+  # there, so it cost ~165 of the 2000 free monthly minutes on every push:
+  # about eleven pushes a month. It is also the platform least worth paying
+  # for here, because development happens on macOS, so `./scripts/ci-local`
+  # already exercises every BSD-tool and case-insensitive-filesystem path on
+  # a real Mac before anything is pushed. Linux is the one nobody would
+  # otherwise test.
+  installer:
+    name: installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      # Runs against hostile fake HOMEs, never the runner's real one.
+      - name: installer suite
+        run: bash tests/install_test.sh
+
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=warning install.sh uninstall.sh tests/install_test.sh
+
+      # No pipe. Piping into `tail` hands the step `tail`'s exit status, so this
+      # gate reported success over a SyntaxError for as long as it existed.
+      # -W error::SyntaxWarning promotes warnings too: an invalid escape in a
+      # non-raw docstring shipped for months because a warning is not a failure.
+      - name: python syntax
+        run: |
+          python3 -W error::SyntaxWarning -m compileall -q hooks/ evals/ operator-skills/ scripts/ tests/
+          python3 -c "import sys; sys.path.insert(0,'hooks'); import guard_rules; print('imports clean')"
+
+      # Canonical skill sources must travel with an archive. Adapted sources
+      # carry provenance in THIRD-PARTY-NOTICES.md instead of a vendor tree.
+      - name: self-contained skill sources
+        run: |
+          test ! -e vendor || { echo "vendor/ is back"; exit 1; }
+          test -z "$(find skills -maxdepth 1 -mindepth 1 -type l)" \
+            || { echo "a skill is a symlink into somewhere else"; exit 1; }
+
+      # A personal override file must never be committed.
+      - name: no personal overrides committed
+        run: |
+          git ls-files --error-unmatch AGENTS.local.md >/dev/null 2>&1 \
+            && { echo "AGENTS.local.md is tracked and must not be"; exit 1; } || true
+
+      - name: no secrets or credentials
+        run: python3 tests/audit.py

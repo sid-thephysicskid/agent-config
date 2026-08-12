@@ -1,0 +1,68 @@
+{
+  "name": "agent-config",
+  "version": "0.1.0",
+  "description": "Auditable guardrails and focused delivery workflows for coding agents.",
+  "license": "MIT",
+  "author": "Sid Abhinav",
+  "homepage": "https://github.com/sid-thephysicskid/agent-config#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sid-thephysicskid/agent-config.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sid-thephysicskid/agent-config/issues"
+  },
+  "type": "module",
+  "bin": {
+    "agent-config": "bin/agent-config.js"
+  },
+  "files": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
+    "THIRD-PARTY-NOTICES.md",
+    "VERSION",
+    "bin/",
+    "docs/assets/",
+    "hooks/",
+    "install.sh",
+    "operator-profiles/",
+    "operator-skills/",
+    "output-styles/",
+    "plugins/",
+    ".agents/plugins/marketplace.json",
+    ".claude-plugin/marketplace.json",
+    "scripts/agent-init",
+    "scripts/build-plugins",
+    "scripts/install_codex_hooks.py",
+    "scripts/install_settings.py",
+    "skills/",
+    "templates/",
+    "uninstall.sh",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!**/*.pyo",
+    "!**/*.pyd"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "test": "python3 tests/test_npx_cli.py",
+    "prepack": "python3 tests/test_release_metadata.py && python3 tests/test_npx_cli.py"
+  },
+  "keywords": [
+    "agents",
+    "guardrails",
+    "claude-code",
+    "codex",
+    "skills",
+    "developer-tools"
+  ]
+}

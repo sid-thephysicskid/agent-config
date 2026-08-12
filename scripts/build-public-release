@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Export the current commit without Git history or local working state.
+set -euo pipefail
+
+ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REQUESTED_DESTINATION="${1:-}"
+
+if [[ -z "$REQUESTED_DESTINATION" ]]; then
+  printf 'Usage: ./scripts/build-public-release <new-directory>\n' >&2
+  exit 1
+fi
+
+if [[ -e "$REQUESTED_DESTINATION" || -L "$REQUESTED_DESTINATION" ]]; then
+  printf 'Destination already exists: %s\n' "$REQUESTED_DESTINATION" >&2
+  exit 1
+fi
+
+# Resolve relative paths and symlinked parents before checking containment. The
+# final path may not exist yet, which os.path.realpath handles portably.
+DESTINATION="$(python3 - "$REQUESTED_DESTINATION" <<'PY'
+import os
+import sys
+
+print(os.path.realpath(sys.argv[1]))
+PY
+)"
+
+case "$DESTINATION" in
+  /|.|..|"$ROOT"|"$ROOT"/|"$ROOT"/*)
+    printf 'Refusing unsafe destination: %s\n' "$REQUESTED_DESTINATION" >&2
+    exit 1
+    ;;
+esac
+
+if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
+  printf 'Destination already exists: %s\n' "$REQUESTED_DESTINATION" >&2
+  exit 1
+fi
+
+if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+  printf 'The worktree is not clean. Commit and verify the release first.\n' >&2
+  exit 1
+fi
+
+PARENT="$(cd "$(dirname "$DESTINATION")" && pwd)"
+NAME="$(basename "$DESTINATION")"
+STAGING="$(mktemp -d "$PARENT/.${NAME}.XXXXXX")"
+cleanup() {
+  if [[ -d "$STAGING" ]]; then
+    rm -r "$STAGING"
+  fi
+}
+trap cleanup EXIT
+
+git -C "$ROOT" archive --format=tar HEAD | tar -x -C "$STAGING"
+
+if find "$STAGING" -type l -print | grep -q .; then
+  printf 'Public export contains a symlink. Refusing release.\n' >&2
+  exit 1
+fi
+
+python3 "$STAGING/tests/audit.py"
+(
+  cd "$STAGING"
+  npm pack --dry-run --json --ignore-scripts >/dev/null
+)
+
+mv "$STAGING" "$DESTINATION"
+trap - EXIT
+printf 'Public source exported to %s\n' "$DESTINATION"
+printf 'It contains the current commit and no Git history.\n'

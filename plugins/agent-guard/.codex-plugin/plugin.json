@@ -1,0 +1,24 @@
+{
+  "name": "agent-guard",
+  "version": "0.1.0",
+  "description": "Deterministic macOS/Linux PreToolUse guardrails for common destructive agent mistakes.",
+  "author": {
+    "name": "Sid Abhinav",
+    "url": "https://github.com/sid-thephysicskid"
+  },
+  "homepage": "https://github.com/sid-thephysicskid/agent-config",
+  "repository": "https://github.com/sid-thephysicskid/agent-config",
+  "license": "MIT",
+  "keywords": ["agents", "guardrails", "claude-code", "codex", "safety"],
+  "interface": {
+    "displayName": "Agent Guard",
+    "shortDescription": "Block common destructive agent mistakes",
+    "longDescription": "On macOS and Linux, deterministic local hooks block risky Git, credential, database, filesystem, deployment, and infrastructure operations before they run. Windows is not supported in version 0.1.",
+    "developerName": "Sid Abhinav",
+    "category": "Developer",
+    "capabilities": ["Hooks"],
+    "defaultPrompt": [
+      "Explain which risky operations Agent Guard blocks."
+    ]
+  }
+}

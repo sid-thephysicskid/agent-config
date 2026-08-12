@@ -1,0 +1,19 @@
+# Matches .gitattributes: LF everywhere, so a CRLF checkout cannot break install.sh.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.py]
+indent_size = 4
+
+[*.{sh,md,json,yml,yaml,toml}]
+indent_size = 2
+
+# Trailing whitespace is significant in Markdown (two spaces is a line break).
+[*.md]
+trim_trailing_whitespace = false

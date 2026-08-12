@@ -1,0 +1,3 @@
+interface:
+  display_name: "To Spec"
+  short_description: "Turn decided context into a concise spec"

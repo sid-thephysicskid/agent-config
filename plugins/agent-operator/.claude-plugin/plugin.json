@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "agent-operator",
+  "version": "0.1.0",
+  "description": "Optional research, handoff, credential setup, and communication tools.",
+  "author": {
+    "name": "Sid Abhinav",
+    "url": "https://github.com/sid-thephysicskid"
+  },
+  "homepage": "https://github.com/sid-thephysicskid/agent-config",
+  "repository": "https://github.com/sid-thephysicskid/agent-config",
+  "license": "MIT",
+  "keywords": ["agents", "skills", "research", "credentials", "claude-code"],
+  "outputStyles": "./output-styles/"
+}

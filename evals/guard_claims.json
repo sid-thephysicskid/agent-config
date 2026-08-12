@@ -1,0 +1,53 @@
+{
+  "_about": [
+    "A small contract between prose and executable guard behavior.",
+    "Each quote must exist in the cited file and each command is evaluated",
+    "against the live rule engine. Detailed coverage belongs in floor.py."
+  ],
+  "claims": [
+    {
+      "id": "protected-branch-commit",
+      "skill": "guard",
+      "file": "AGENTS.md",
+      "quote": "Never commit or push on",
+      "command": "git commit -m \"feat: unsafe\"",
+      "branch": "protected",
+      "expect": "block",
+      "kind": "claim",
+      "why": "This is the central protected-branch promise."
+    },
+    {
+      "id": "force-push",
+      "skill": "guard",
+      "file": "AGENTS.md",
+      "quote": "Never force-push",
+      "command": "git push --force",
+      "branch": "feature",
+      "expect": "block",
+      "kind": "claim",
+      "why": "A normal force push must remain blocked on feature branches too."
+    },
+    {
+      "id": "pinned-lease",
+      "skill": "guard",
+      "file": "AGENTS.md",
+      "quote": "git push --force-with-lease=<branch>:<sha>",
+      "command": "git push --force-with-lease=fix/eval-fixture:0123456789abcdef0123456789abcdef01234567",
+      "branch": "feature",
+      "expect": "allow",
+      "kind": "claim",
+      "why": "The one documented history-rewrite escape hatch must be usable."
+    },
+    {
+      "id": "live-env-read",
+      "skill": "guard",
+      "file": "AGENTS.md",
+      "quote": "Never read or write a real `.env`",
+      "command": "cat .env",
+      "branch": "feature",
+      "expect": "block",
+      "kind": "claim",
+      "why": "The credential boundary is a headline guarantee."
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# Create one cross-agent project instruction source without taking user files.
+set -uo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  SOURCE_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$SOURCE_DIR/$SOURCE"
+done
+REPO="$(cd "$(dirname "$SOURCE")/.." && pwd)"
+TEMPLATE="$REPO/templates/AGENTS.project.md"
+CHECK=0
+DIRECTORY="."
+directory_seen=0
+
+usage() {
+  printf 'Usage: agent-init [directory] [--check]\n' >&2
+  exit 1
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --check)
+      (( CHECK )) && usage
+      CHECK=1
+      ;;
+    -*) usage ;;
+    *)
+      (( directory_seen )) && usage
+      DIRECTORY="$arg"
+      directory_seen=1
+      ;;
+  esac
+done
+
+if [[ ! -d "$DIRECTORY" ]]; then
+  printf 'agent-init: not a directory: %s\n' "$DIRECTORY" >&2
+  exit 1
+fi
+if ! START="$(cd "$DIRECTORY" 2>/dev/null && pwd -P)"; then
+  printf 'agent-init: cannot access directory: %s\n' "$DIRECTORY" >&2
+  exit 1
+fi
+if command -v git >/dev/null 2>&1 \
+   && ROOT_CANDIDATE="$(git -C "$START" rev-parse --show-toplevel 2>/dev/null)"; then
+  if ! ROOT="$(cd "$ROOT_CANDIDATE" 2>/dev/null && pwd -P)"; then
+    printf 'agent-init: cannot access repository root: %s\n' "$ROOT_CANDIDATE" >&2
+    exit 1
+  fi
+else
+  ROOT="$START"
+fi
+
+AGENTS="$ROOT/AGENTS.md"
+CLAUDE="$ROOT/CLAUDE.md"
+problems=0
+missing=0
+
+if [[ -L "$AGENTS" ]]; then
+  printf 'agent-init: %s must be the real canonical file, not a symlink\n' "$AGENTS" >&2
+  problems=1
+elif [[ -e "$AGENTS" && ! -f "$AGENTS" ]]; then
+  printf 'agent-init: %s exists but is not a file; it will not be replaced\n' "$AGENTS" >&2
+  problems=1
+elif [[ ! -e "$AGENTS" ]]; then
+  (( CHECK )) && printf 'agent-init: AGENTS.md is missing\n' >&2
+  missing=1
+fi
+
+if [[ -L "$CLAUDE" ]]; then
+  if [[ "$(readlink "$CLAUDE")" != "AGENTS.md" ]]; then
+    printf "agent-init: %s points to '%s', not AGENTS.md; it will not be replaced\n" \
+      "$CLAUDE" "$(readlink "$CLAUDE")" >&2
+    problems=1
+  fi
+elif [[ -e "$CLAUDE" ]]; then
+  printf 'agent-init: %s already exists; agent-init will not replace it\n' "$CLAUDE" >&2
+  problems=1
+else
+  (( CHECK )) && printf 'agent-init: CLAUDE.md symlink is missing\n' >&2
+  missing=1
+fi
+
+if (( problems )); then
+  printf 'agent-init: reconcile the existing instructions manually, keeping AGENTS.md canonical, then run this command again\n' >&2
+  exit 1
+fi
+if (( CHECK )); then
+  (( missing )) && exit 1
+  printf 'agent-init: %s uses AGENTS.md as the shared instruction source\n' "$ROOT"
+  exit 0
+fi
+
+[[ -r "$TEMPLATE" ]] || { printf 'agent-init: cannot read template %s\n' "$TEMPLATE" >&2; exit 1; }
+AGENTS_TEMP=""
+CREATED_AGENTS=0
+cleanup() {
+  [[ -n "$AGENTS_TEMP" ]] && rm -f "$AGENTS_TEMP"
+}
+trap cleanup EXIT
+
+# Publish with no-clobber operations. A final-path `mv` would overwrite a user
+# file created after inspection. Hard-linking the prepared regular file and
+# creating the final symlink directly both fail if any occupant appears.
+if [[ ! -e "$AGENTS" ]]; then
+  AGENTS_TEMP="$(mktemp "$ROOT/.AGENTS.md.XXXXXX")" || exit 1
+  cp "$TEMPLATE" "$AGENTS_TEMP" || exit 1
+  chmod 0644 "$AGENTS_TEMP" || exit 1
+  if ! ln "$AGENTS_TEMP" "$AGENTS"; then
+    printf 'agent-init: %s appeared during initialization; it was not replaced\n' "$AGENTS" >&2
+    exit 1
+  fi
+  CREATED_AGENTS=1
+  printf 'created %s\n' "$AGENTS"
+else
+  printf 'preserved %s\n' "$AGENTS"
+fi
+if [[ ! -L "$CLAUDE" ]]; then
+  if ! ln -s AGENTS.md "$CLAUDE"; then
+    printf 'agent-init: %s appeared during initialization; it was not replaced\n' "$CLAUDE" >&2
+    if (( CREATED_AGENTS )) && [[ "$AGENTS" -ef "$AGENTS_TEMP" ]]; then
+      rm "$AGENTS"
+    fi
+    exit 1
+  fi
+  printf 'linked %s -> AGENTS.md\n' "$CLAUDE"
+else
+  printf 'preserved %s -> AGENTS.md\n' "$CLAUDE"
+fi
+if (( CREATED_AGENTS )); then
+  rm "$AGENTS_TEMP" || exit 1
+  AGENTS_TEMP=""
+fi

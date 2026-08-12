@@ -1,0 +1,26 @@
+{
+  "name": "agent-workflow",
+  "version": "0.1.0",
+  "description": "A focused delivery workflow with shared project instructions.",
+  "author": {
+    "name": "Sid Abhinav",
+    "url": "https://github.com/sid-thephysicskid"
+  },
+  "homepage": "https://github.com/sid-thephysicskid/agent-config",
+  "repository": "https://github.com/sid-thephysicskid/agent-config",
+  "license": "MIT",
+  "keywords": ["agents", "skills", "software-development", "claude-code", "codex"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Workflow",
+    "shortDescription": "A compact skill pack for shipping software",
+    "longDescription": "Thirteen focused skills cover decisions through delivery. Bootstrap and setup create one canonical AGENTS.md with CLAUDE.md linked to it, so project instructions stay aligned across hosts.",
+    "developerName": "Sid Abhinav",
+    "category": "Developer",
+    "capabilities": ["Skills"],
+    "defaultPrompt": [
+      "Help me turn this software idea into the next concrete step.",
+      "Review this implementation before I ship it."
+    ]
+  }
+}

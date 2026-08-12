@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wizard"
+  short_description: "Guide safe setup without exposing credentials"
+  default_prompt: "Use $wizard to prepare a safe human-run credential setup plan."

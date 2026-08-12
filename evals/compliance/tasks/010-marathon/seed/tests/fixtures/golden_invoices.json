@@ -1,0 +1,175 @@
+{
+  "generated_from": "src/report.py SAMPLE",
+  "invoices": [
+    {
+      "customer_id": "C-100",
+      "gross_minor": 35839,
+      "invoice_id": "INV-2026-07-001",
+      "issued": "2026-07-03",
+      "lines": [
+        {
+          "description": "Widget, standard",
+          "net_minor": 16367,
+          "quantity": 14,
+          "sku": "WID-1",
+          "unit_minor": 1299,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Widget, reinforced",
+          "net_minor": 12825,
+          "quantity": 3,
+          "sku": "WID-2",
+          "unit_minor": 4750,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Printed manual",
+          "net_minor": 809,
+          "quantity": 1,
+          "sku": "DOC-1",
+          "unit_minor": 899,
+          "vat_band": "zero"
+        }
+      ],
+      "name": "Ashgrove Ltd",
+      "net_minor": 30001,
+      "region": "GB",
+      "tier": "gold",
+      "vat_minor": 5838
+    },
+    {
+      "customer_id": "C-204",
+      "gross_minor": 123653,
+      "invoice_id": "INV-2026-07-002",
+      "issued": "2026-07-07",
+      "lines": [
+        {
+          "description": "Widget, standard",
+          "net_minor": 59442,
+          "quantity": 52,
+          "sku": "WID-1",
+          "unit_minor": 1299,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Installation, half day",
+          "net_minor": 42750,
+          "quantity": 2,
+          "sku": "SRV-9",
+          "unit_minor": 22500,
+          "vat_band": "standard"
+        }
+      ],
+      "name": "Bruinsma BV",
+      "net_minor": 102192,
+      "region": "NL",
+      "tier": "silver",
+      "vat_minor": 21461
+    },
+    {
+      "customer_id": "C-311",
+      "gross_minor": 40573,
+      "invoice_id": "INV-2026-07-003",
+      "issued": "2026-07-11",
+      "lines": [
+        {
+          "description": "Widget, compact",
+          "net_minor": 5831,
+          "quantity": 7,
+          "sku": "WID-3",
+          "unit_minor": 833,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Widget, standard",
+          "net_minor": 15620,
+          "quantity": 13,
+          "sku": "WID-1",
+          "unit_minor": 1299,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Support, monthly",
+          "net_minor": 12500,
+          "quantity": 1,
+          "sku": "SUB-1",
+          "unit_minor": 12500,
+          "vat_band": "reduced"
+        }
+      ],
+      "name": "Coirneal Teo",
+      "net_minor": 33951,
+      "region": "IE",
+      "tier": "standard",
+      "vat_minor": 6622
+    },
+    {
+      "customer_id": "C-402",
+      "gross_minor": 603982,
+      "invoice_id": "INV-2026-07-004",
+      "issued": "2026-07-19",
+      "lines": [
+        {
+          "description": "Widget, reinforced",
+          "net_minor": 421800,
+          "quantity": 111,
+          "sku": "WID-2",
+          "unit_minor": 4750,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Printed manual",
+          "net_minor": 30566,
+          "quantity": 40,
+          "sku": "DOC-1",
+          "unit_minor": 899,
+          "vat_band": "zero"
+        },
+        {
+          "description": "Support, monthly",
+          "net_minor": 63750,
+          "quantity": 6,
+          "sku": "SUB-1",
+          "unit_minor": 12500,
+          "vat_band": "reduced"
+        }
+      ],
+      "name": "Dreyfus SARL",
+      "net_minor": 516116,
+      "region": "FR",
+      "tier": "platinum",
+      "vat_minor": 87866
+    },
+    {
+      "customer_id": "C-100",
+      "gross_minor": 77958,
+      "invoice_id": "INV-2026-07-005",
+      "issued": "2026-07-28",
+      "lines": [
+        {
+          "description": "Widget, compact",
+          "net_minor": 44715,
+          "quantity": 61,
+          "sku": "WID-3",
+          "unit_minor": 833,
+          "vat_band": "standard"
+        },
+        {
+          "description": "Installation, half day",
+          "net_minor": 20250,
+          "quantity": 1,
+          "sku": "SRV-9",
+          "unit_minor": 22500,
+          "vat_band": "standard"
+        }
+      ],
+      "name": "Ashgrove Ltd",
+      "net_minor": 64965,
+      "region": "GB",
+      "tier": "gold",
+      "vat_minor": 12993
+    }
+  ],
+  "month": "2026-07"
+}

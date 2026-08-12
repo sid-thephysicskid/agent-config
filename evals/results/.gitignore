@@ -1,0 +1,4 @@
+# Scored runs are evidence about one model on one day. Keep them out of the
+# repo: a stale result that looks current is worse than no result.
+*
+!.gitignore

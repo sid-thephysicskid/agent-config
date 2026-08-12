@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Does the documentation still match the code?
+#
+# CI and contributors run this explicitly. Everything here must be a
+# measurement rather than an opinion, or it becomes a noisy gate people ignore.
+#
+# Every check below compares a sentence in a doc against the thing it describes:
+#   - run_evals.py holds check_context_budget_claim (the README's stated
+#     token cost) and the guard_claims pins (each stated guard behaviour tied
+#     to the exact sentence asserting it).
+#   - selected public guardrail claims are executed against the live guard.
+set -uo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 0
+
+fail=0
+
+# Pinned doc claims. Error severity only: warnings are thresholds, not facts.
+if ! out=$(python3 evals/run_evals.py --severity error 2>&1); then
+  echo "$out" | grep -E "ERROR|doc-truth" || echo "$out" | tail -20
+  fail=1
+fi
+
+# Every skill name the README lists must exist, and every skill must be listed.
+# One direction only: every skill on disk must appear in the README. The
+# reverse (every code-formatted word in the README must be a skill) would catch
+# host commands and ordinary identifiers too. A check that cries wolf gets
+# ignored.
+missing=$(for root in skills operator-skills; do
+  for d in "$root"/*/; do
+    [ -f "$d/SKILL.md" ] || continue
+    n=$(basename "$d")
+    grep -q "\`$n\`" README.md || echo "  $root/$n exists but the README does not list it"
+  done
+done)
+if [ -n "$missing" ]; then
+  echo "README and packaged skills disagree:"
+  echo "$missing"
+  fail=1
+fi
+
+exit $fail

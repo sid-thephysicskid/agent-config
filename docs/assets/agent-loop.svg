@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 1040" role="img" aria-labelledby="title desc">
+  <title id="title">How instructions, skills, tools, and guardrails fit into an agent loop</title>
+  <desc id="desc">Durable sources feed a finite context. The model proposes a tool call. A pre-tool guard either blocks it with a safer route or allows the host to execute it. Tool output returns to the next turn.</desc>
+  <defs>
+    <marker id="navy-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#0b2940"/>
+    </marker>
+    <marker id="red-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#c83832"/>
+    </marker>
+    <style>
+      .heading { font: 700 28px ui-sans-serif, system-ui, sans-serif; fill: #0b2940; }
+      .label { font: 650 23px ui-sans-serif, system-ui, sans-serif; fill: #0b2940; }
+      .body { font: 500 19px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
+      .note { font: 500 17px ui-sans-serif, system-ui, sans-serif; fill: #38566a; }
+      .box { fill: #fffaf0; stroke: #0b2940; stroke-width: 2.5; }
+      .source { fill: #e8f0f2; stroke: #6c8796; stroke-width: 2; }
+      .line { fill: none; stroke: #0b2940; stroke-width: 4; marker-end: url(#navy-arrow); }
+    </style>
+  </defs>
+
+  <rect width="640" height="1040" rx="22" fill="#f4ecd9"/>
+  <text x="32" y="48" class="heading">Durable sources</text>
+  <text x="32" y="76" class="note">Loaded only when the host chooses to use them</text>
+
+  <g transform="translate(32 104)">
+    <rect class="source" width="276" height="92" rx="11"/>
+    <text x="18" y="35" class="label">Instructions</text>
+    <text x="18" y="66" class="body">AGENTS.md · CLAUDE.md</text>
+  </g>
+  <g transform="translate(332 104)">
+    <rect class="source" width="276" height="92" rx="11"/>
+    <text x="18" y="35" class="label">Skills</text>
+    <text x="18" y="66" class="body">One selected playbook</text>
+  </g>
+  <g transform="translate(32 216)">
+    <rect class="source" width="276" height="92" rx="11"/>
+    <text x="18" y="35" class="label">Repository</text>
+    <text x="18" y="66" class="body">Code · tests · docs</text>
+  </g>
+  <g transform="translate(332 216)">
+    <rect width="276" height="92" rx="11" fill="#f4ecd9" stroke="#6c8796" stroke-width="2" stroke-dasharray="8 7"/>
+    <text x="18" y="35" class="label">Host memory</text>
+    <text x="18" y="66" class="body">Optional, host-dependent</text>
+  </g>
+
+  <path class="line" d="M170 308v42h150v30"/>
+  <path class="line" d="M470 308v42H320"/>
+
+  <g transform="translate(52 380)">
+    <rect class="box" width="536" height="126" rx="14"/>
+    <text x="24" y="39" class="label">Agent host builds finite context</text>
+    <text x="24" y="73" class="body">Request + selected instructions + relevant files</text>
+    <text x="24" y="102" class="note">Older material may be summarized or dropped.</text>
+  </g>
+
+  <path class="line" d="M320 506v54"/>
+  <g transform="translate(52 560)">
+    <rect class="box" width="536" height="104" rx="14"/>
+    <text x="24" y="40" class="label">Model proposes a tool call</text>
+    <text x="24" y="74" class="body">The model asks. The host controls execution.</text>
+  </g>
+
+  <path class="line" d="M320 664v54"/>
+  <g transform="translate(128 718)">
+    <rect width="384" height="104" rx="14" fill="#fffaf0" stroke="#c58a24" stroke-width="3"/>
+    <text x="24" y="40" class="label">Pre-tool guard</text>
+    <text x="24" y="74" class="body">Inspect before the tool can run</text>
+  </g>
+
+  <path d="M128 770H70v86" fill="none" stroke="#c83832" stroke-width="4" marker-end="url(#red-arrow)"/>
+  <path class="line" d="M512 770h58v86"/>
+
+  <g transform="translate(32 856)">
+    <rect width="276" height="106" rx="13" fill="#f8e4dc" stroke="#c83832" stroke-width="2.5"/>
+    <text x="20" y="40" class="label">Block</text>
+    <text x="20" y="72" class="body">Explain why and give</text>
+    <text x="20" y="96" class="body">a safer route</text>
+  </g>
+  <g transform="translate(332 856)">
+    <rect class="box" width="276" height="106" rx="13"/>
+    <text x="20" y="40" class="label">Tool runs</text>
+    <text x="20" y="72" class="body">Git · files · database</text>
+    <text x="20" y="96" class="body">API · browser</text>
+  </g>
+
+  <path d="M470 962v42H20V443h32" fill="none" stroke="#0b2940" stroke-width="3.5" stroke-dasharray="9 8" marker-end="url(#navy-arrow)"/>
+  <text x="210" y="1024" class="note">Output returns to the next turn</text>
+</svg>

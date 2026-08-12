@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "title": "Example service setup",
+  "allowed_hosts": [
+    "example.com"
+  ],
+  "env_file": ".env",
+  "github_repository": "owner/repository",
+  "stages": [
+    {
+      "title": "Copy the service API key",
+      "url": "https://example.com/dashboard/api-keys",
+      "instructions": [
+        "Create a restricted key for local development.",
+        "Copy the key. Do not paste it into the agent conversation."
+      ],
+      "captures": [
+        {
+          "name": "SERVICE_API_KEY",
+          "prompt": "Paste the service API key",
+          "secret": true,
+          "destinations": [
+            {
+              "type": "env",
+              "name": "SERVICE_API_KEY"
+            },
+            {
+              "type": "github-secret",
+              "name": "SERVICE_API_KEY"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+# LF, always. A CRLF checkout makes install.sh die on line 12 with
+# "set: pipefail: invalid option name", which points nowhere near the cause.
+# The wildcard is the rule; the lines under it are documentation of what is
+# actually in the tree. Naming only four extensions left 123 tracked files
+# (vendored .mjs and .js, .yaml, .toml, LICENSE) to the adopter's core.autocrlf.
+*      text=auto eol=lf
+*.sh   text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.mjs  text eol=lf
+*.js   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.toml text eol=lf

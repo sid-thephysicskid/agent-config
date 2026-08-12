@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Personal overrides: yours, never the repo's. See AGENTS.md 'Local overrides'.
+AGENTS.local.md
+
+# Agent worktrees for multi-sitting work. Never committed.
+.claude/worktrees/
+
+# Example output from the plugin release builder.
+/dist-plugins/
