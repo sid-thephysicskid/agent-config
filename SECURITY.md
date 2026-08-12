@@ -2,7 +2,11 @@
 
 ## What this is
 
-The guard hooks in `hooks/` are a safety net against agent mistakes, not a security boundary. A bug in a guard fails **open** on purpose, so that it can never brick the CLI. Analysis that runs out of time does the opposite and refuses, because otherwise the slowest path through the rules would be the widest way through them. Read the Agent Guard threat model in `README.md` before reporting anything.
+The guard hooks in `hooks/` are a safety net against agent mistakes, not a
+security boundary. Internal errors fail **open**. Analysis timeouts also fail
+open unless a cheap scan finds a destructive command shape, in which case the
+tool call is refused. Read the [Guard section](README.md#guard) before reporting
+anything.
 
 ## Worth reporting
 
@@ -21,4 +25,5 @@ Include the exact command string, the working directory it ran from, and what yo
 
 ## Supported versions
 
-Security fixes are supported on the latest tagged release. `main` contains the next release and may change before tagging. Until the first public beta is tagged, pin an audited commit rather than treating a moving branch as a stable executable dependency.
+Security fixes are supported on the latest tagged release. If no release is
+tagged, audit and pin a commit rather than depending on a moving branch.

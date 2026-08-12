@@ -38,4 +38,14 @@ if [ -n "$missing" ]; then
   fail=1
 fi
 
+# The README's package counts are user-facing installation facts. Keep them
+# derived from what will actually be packaged instead of letting a GitHub
+# description or a remembered total drift.
+workflow_count=$(find skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
+operator_count=$(find operator-skills -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
+if ! grep -q "ships $workflow_count workflow skills and $operator_count optional operator skills" README.md; then
+  echo "README skill counts do not match the packaged directories: $workflow_count workflow, $operator_count operator"
+  fail=1
+fi
+
 exit $fail

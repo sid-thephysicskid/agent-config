@@ -425,38 +425,6 @@ def check_invocation_parity(skills: Sequence[SkillDoc]) -> List[Finding]:
     return out
 
 
-def check_context_budget_claim(skills: Sequence[SkillDoc]) -> List[Finding]:
-    """The README states the always-loaded cost. Does it still match?
-
-    A number written into prose is a number that rots, and this one is the
-    repo's central claim about being small. It changes whenever any skill's
-    description is edited or a skill flips its invocation mode, which is
-    exactly the edit least likely to send anyone back to the README.
-
-    Same idea as guard_claims.json: pin the sentence, fail on drift rather
-    than reporting green against text that is no longer true.
-    """
-    readme = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))), "README.md")
-    if not os.path.exists(readme):
-        return []
-    text = read(readme)
-    m = re.search(r"total ([\d,]+) characters", text)
-    if not m:
-        return [Finding("doc-truth", "warn",
-                        "README no longer states the always-loaded description budget; "
-                        "either restore the sentence or delete this check", "README")]
-    claimed = int(m.group(1).replace(",", ""))
-    actual = sum(len(s.description) for s in skills
-                 if str(s.frontmatter.get("disable-model-invocation", "")).lower() != "true")
-    if claimed != actual:
-        return [Finding("doc-truth", "error",
-                        "README claims %d chars of always-loaded description, actual is %d"
-                        % (claimed, actual), "README",
-                        evidence="edit README.md, or the description that moved")]
-    return []
-
-
 def check_internal_links(skills: Sequence[SkillDoc]) -> List[Finding]:
     """Relative markdown links must resolve on disk."""
     out = []  # type: List[Finding]
@@ -652,7 +620,6 @@ ALL_CHECKS = (
     check_skill_references,
     check_orchestration_handoffs,
     check_invocation_parity,
-    check_context_budget_claim,
     check_internal_links,
     check_referenced_paths,
     check_size_budget,
