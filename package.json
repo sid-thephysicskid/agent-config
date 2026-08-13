@@ -1,6 +1,6 @@
 {
   "name": "@sid-thephysicskid/agent-config",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Auditable guardrails and focused delivery workflows for coding agents.",
   "license": "MIT",
   "author": "Sid Abhinav",
@@ -38,6 +38,8 @@
     "scripts/build-plugins",
     "scripts/install_codex_hooks.py",
     "scripts/install_settings.py",
+    "scripts/manage_conflicts.py",
+    "scripts/manage_instructions.py",
     "skills/",
     "templates/",
     "uninstall.sh",

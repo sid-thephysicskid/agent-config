@@ -34,6 +34,8 @@ run "Codex hook merge"  python3 tests/test_install_codex_hooks.py
 run "Claude settings"   python3 tests/test_install_settings.py
 run "release metadata"  python3 tests/test_release_metadata.py
 run "npm CLI"           python3 tests/test_npx_cli.py
+run "onboarding"        python3 tests/test_onboarding.py
+run "install helpers"   python3 tests/test_install_helpers.py
 run "project agent init" python3 tests/test_agent_init.py
 run "wizard tests"      python3 operator-skills/wizard/tests/test_wizard.py
 run "eval harness self" python3 evals/test_harness.py

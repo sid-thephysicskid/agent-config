@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Wire this repo into Claude Code and Codex.
 #
-#   ./install.sh guard             safety hooks only
+#   ./install.sh standard          guardrails, workflow, and routing
+#   ./install.sh guard             safety hooks only (legacy advanced profile)
 #   ./install.sh workflow          skills, orchestration, and project init
 #   ./install.sh operator          optional human-in-the-loop utilities
 #   ./install.sh full              all three products
@@ -9,11 +10,9 @@
 #   ./install.sh workflow --baseline  require global orchestration or refuse
 #   ./install.sh <profile> --check report state, change nothing
 #
-# Idempotent, and it never takes a path that is already someone else's. If one
-# is occupied it refuses before writing a byte, names every path in the way, and
-# prints the `mv` that clears each. It never edits a file it cannot parse. All
-# preflight checks run before any mutation, so neither a missing dependency nor
-# an occupied path can leave a half-install.
+# Idempotent. Existing shared configuration is merged, same-name skills are
+# kept or backed up by one conflict decision, and unsupported path shapes are
+# refused before wiring starts. It never edits a file it cannot parse.
 #
 # The two files it writes into rather than claims are shared configuration:
 # ~/.claude/settings.json and ~/.codex/hooks.json. Existing keys and hooks are
@@ -39,20 +38,29 @@ CHECK=0
 PROBLEMS=0
 PROFILE="guard"
 BASELINE_MODE="auto"
+CONFLICT_MODE="auto"
 _baseline_seen=0
 _skills_only_seen=0
 _profile_seen=0
+_extras_seen=0
 _bad_arg() {
   printf '\n  \033[31mABORTED:\033[0m %s\n' "$1" >&2
-  printf '  Usage: ./install.sh [guard|workflow|operator|full] [--check] [--baseline|--skills-only]\n\n' >&2
+  printf '  Usage: ./install.sh [standard|guard|workflow|operator|full] [--check] [--extras] [--keep-existing|--replace-conflicts]\n\n' >&2
   exit 1
 }
 # `--dry-run` used to perform a real install, so unknown flags remain fatal.
 for _arg in "$@"; do
   case "$_arg" in
-    guard|workflow|operator|full)
+    standard|guard|workflow|operator|full)
+      (( _extras_seen )) && _bad_arg "--extras cannot be combined with a profile."
       (( _profile_seen )) && _bad_arg "more than one profile was supplied."
       PROFILE="$_arg"; _profile_seen=1
+      ;;
+    --extras)
+      (( _profile_seen )) && _bad_arg "--extras cannot be combined with a profile."
+      (( _extras_seen )) && _bad_arg "--extras was supplied more than once."
+      _extras_seen=1
+      PROFILE="full"
       ;;
     --check)
       (( CHECK )) && _bad_arg "--check was supplied more than once."
@@ -70,15 +78,23 @@ for _arg in "$@"; do
       _skills_only_seen=1
       BASELINE_MODE="off"
       ;;
+    --keep-existing)
+      [[ "$CONFLICT_MODE" == auto ]] || _bad_arg "more than one conflict option was supplied."
+      CONFLICT_MODE="keep"
+      ;;
+    --replace-conflicts)
+      [[ "$CONFLICT_MODE" == auto ]] || _bad_arg "more than one conflict option was supplied."
+      CONFLICT_MODE="replace"
+      ;;
     *) _bad_arg "unknown argument: $_arg" ;;
   esac
 done
-if [[ $# -gt 3 ]]; then _bad_arg "too many arguments."; fi
+if [[ $# -gt 4 ]]; then _bad_arg "too many arguments."; fi
 INSTALL_GUARD=0
 INSTALL_WORKFLOW=0
 INSTALL_OPERATOR=0
-[[ "$PROFILE" == guard || "$PROFILE" == full ]] && INSTALL_GUARD=1
-[[ "$PROFILE" == workflow || "$PROFILE" == full ]] && INSTALL_WORKFLOW=1
+[[ "$PROFILE" == standard || "$PROFILE" == guard || "$PROFILE" == full ]] && INSTALL_GUARD=1
+[[ "$PROFILE" == standard || "$PROFILE" == workflow || "$PROFILE" == full ]] && INSTALL_WORKFLOW=1
 [[ "$PROFILE" == operator || "$PROFILE" == full ]] && INSTALL_OPERATOR=1
 (( (_baseline_seen || _skills_only_seen) && ! INSTALL_WORKFLOW )) \
   && _bad_arg "--baseline and --skills-only require the workflow or full profile."
@@ -90,34 +106,15 @@ SKILL_ROOTS=()
 WORKFLOW_SKILLS=(navigate prototype bootstrap setup to-spec breakdown domain-modeling architect tdd diagnose review unstick ship)
 OPERATOR_SKILLS=(research wizard handoff)
 
-# Claude Code reads CLAUDE_CONFIG_DIR and Codex reads CODEX_HOME. Installing
-# into ~/.claude regardless would report a clean "Done" while wiring nothing
-# the agent will ever read. Refusing is the honest failure: supporting them
-# properly means deriving the paths baked into the hook commands too, and a
-# silently unguarded install is the worst of the three outcomes.
-# Resolved, not compared as strings: a trailing slash, or a symlinked path
-# that lands in the same place, is the same directory and must not be refused.
-_same_dir() {
-  local a b
-  a="$(cd "$1" 2>/dev/null && pwd -P)" || a="$1"
-  b="$(cd "$2" 2>/dev/null && pwd -P)" || b="$2"
-  [[ "${a%/}" == "${b%/}" ]]
-}
-for _v in CLAUDE_CONFIG_DIR:.claude CODEX_HOME:.codex; do
-  _name="${_v%%:*}"; _dir="$HOME/${_v##*:}"
-  _val="$(eval "printf '%s' \"\${$_name:-}\"")"
-  if [[ -n "$_val" ]] && ! _same_dir "$_val" "$_dir"; then
-    printf '\n  \033[31mABORTED:\033[0m %s points at %s, and this script only installs into %s.\n' \
-      "$_name" "$_val" "$_dir" >&2
-    printf '  Unset %s and run again. (Supporting it properly means deriving the paths\n' "$_name" >&2
-    printf '  baked into the hook commands too, and an install that reports success while\n' >&2
-    printf '  wiring nothing your agent reads is the worst of the three outcomes.)\n\n' >&2
-    exit 1
-  fi
-done
+CLAUDE_ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CODEX_ROOT="${CODEX_HOME:-$HOME/.codex}"
+COMPACT="${AGENT_CONFIG_COMPACT:-0}"
 
-ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+ok()   { (( COMPACT )) || printf '  \033[32m✓\033[0m %s\n' "$1"; }
+status() { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
+detail_warn() { (( COMPACT )) || warn "$1"; }
+section() { (( COMPACT )) || { echo; echo "$1"; }; }
 err()  { printf '  \033[31m✗\033[0m %s\n' "$1"; PROBLEMS=$((PROBLEMS+1)); }
 die()  {
   if (( CHECK )); then printf '  \033[31m✗\033[0m %s\n' "$1"; PROBLEMS=$((PROBLEMS+1)); return 0; fi
@@ -129,7 +126,7 @@ die()  {
 # a dotfile manager's and record 21 `.baklink-` files pointing at the old path;
 # uninstall then dutifully restores all 21 as dangling links, which is worse
 # than doing nothing, and reports success.
-ORIGINS="$HOME/.claude/.agent-config-origins"
+ORIGINS="$CLAUDE_ROOT/.agent-config-origins"
 _is_our_target() {
   # PATH BOUNDARY, not a bare prefix. `$t == "$REPO"*` also matched any path
   # that merely shares a string prefix with the clone, so a user's own
@@ -147,6 +144,7 @@ _is_our_target() {
   _ours_under() {
     [[ "$t" == "$1"/skills/* || "$t" == "$1"/operator-skills/* \
        || "$t" == "$1"/hooks/* || "$t" == "$1"/AGENTS.md \
+       || "$t" == "$1"/templates/AGENTS.global.md \
        || "$t" == "$1"/scripts/agent-init \
        || "$t" == "$1"/output-styles/* || "$t" == "$1"/how-to-use.html ]]
   }
@@ -162,13 +160,11 @@ _is_our_target() {
   return 1
 }
 
-# A clean workflow install gets the small always-loaded orchestration layer.
-# Existing user instructions are never partially replaced: auto mode installs
-# neither host baseline when either path is occupied. --baseline is the strict
-# form for users who want a collision to stop the install instead.
+# A clean workflow install gets one shared orchestration source. Existing user
+# instructions receive the same bounded, removable routing block.
 _baseline_available() {
   local p
-  for p in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md"; do
+  for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md"; do
     [[ -e "$p" || -L "$p" ]] || continue
     if [[ -L "$p" ]] && _is_our_target "$(readlink "$p")"; then
       continue
@@ -179,27 +175,18 @@ _baseline_available() {
 }
 _baseline_has_owned_link() {
   local p
-  for p in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md"; do
+  for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md"; do
     [[ -L "$p" ]] && _is_our_target "$(readlink "$p")" && return 0
   done
   return 1
 }
 if (( INSTALL_WORKFLOW )); then
   case "$BASELINE_MODE" in
-    required) INSTALL_BASELINE=1 ;;
     off)
       INSTALL_BASELINE=0
       _baseline_has_owned_link && REMOVE_AUTO_BASELINE=1
       ;;
-    auto)
-      if _baseline_available; then
-        INSTALL_BASELINE=1
-      else
-        INSTALL_BASELINE=0
-        _baseline_has_owned_link && REMOVE_AUTO_BASELINE=1
-        warn "existing global agent instructions detected; preserving both hosts and installing skills only. Reconcile them, then rerun with --baseline to require shared orchestration."
-      fi
-      ;;
+    auto|required) INSTALL_BASELINE=1 ;;
   esac
 fi
 
@@ -207,6 +194,7 @@ fi
 # preflight and printed together: finding out about them one `mv` at a time,
 # across three runs, is its own kind of hostile.
 OCCUPIED=()
+SKILL_CONFLICTS=()
 
 claim() {  # claim <path> -- free, or already ours, or record it
   local p="$1"
@@ -230,51 +218,57 @@ claim_shared_file() {  # claim_shared_file <path> -- every symlink is occupied
   return 1
 }
 
+claim_skill() {  # exact skill names coexist unless the user chooses replacement
+  local p="$1"
+  [[ -e "$p" || -L "$p" ]] || return 0
+  if [[ -L "$p" ]]; then
+    _is_our_target "$(readlink "$p")" && return 0
+  fi
+  SKILL_CONFLICTS+=("$p")
+}
+
 # Everything install writes, checked BEFORE anything is written. The list has
 # to be exhaustive: a path that installs without being claimed here is a path
 # that can still clobber something.
 preflight_paths() {
   local d name f root
-  if (( INSTALL_BASELINE )); then
-    claim "$HOME/.claude/CLAUDE.md" || true
-    claim "$HOME/.codex/AGENTS.md" || true
-  fi
+  # Existing instruction files are merged through a bounded managed block.
+  # Clean paths become symlinks to one shared source.
   if (( INSTALL_GUARD )); then
-    # Shared JSON files are merged rather than claimed. Symlinks are refused,
-    # because an atomic rewrite would silently detach a dotfile manager.
-    claim_shared_file "$HOME/.claude/settings.json" || true
-    claim_shared_file "$HOME/.codex/hooks.json" || true
+    # Shared JSON files are merged. The helpers preserve a dotfile symlink by
+    # updating its target instead of replacing the link.
+    :
   fi
   # A container directory is only a conflict when it is a SYMLINK: a real
   # directory is where we put our links, alongside whatever else is in it.
   if (( INSTALL_WORKFLOW || INSTALL_OPERATOR )); then
-    for d in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
-      [[ -L "$d" ]] && { claim "$d" || true; }
+    for d in "$CLAUDE_ROOT/skills" "$CODEX_ROOT/skills"; do
+      [[ -L "$d" && ! -d "$d" ]] && { claim "$d" || true; }
     done
     for root in "${SKILL_ROOTS[@]}"; do
       for d in "$root"/*/; do
         [[ -f "$d/SKILL.md" ]] || continue
         name="$(basename "$d")"
-        claim "$HOME/.claude/skills/$name" || true
-        [[ -d "$HOME/.codex" ]] && { claim "$HOME/.codex/skills/$name" || true; }
+        claim_skill "$CLAUDE_ROOT/skills/$name"
+        claim_skill "$CODEX_ROOT/skills/$name"
       done
     done
   fi
   if (( INSTALL_WORKFLOW )); then
-    [[ -L "$HOME/.local" ]] && { claim "$HOME/.local" || true; }
-    [[ -L "$HOME/.local/bin" ]] && { claim "$HOME/.local/bin" || true; }
+    [[ -L "$HOME/.local" && ! -d "$HOME/.local" ]] && { claim "$HOME/.local" || true; }
+    [[ -L "$HOME/.local/bin" && ! -d "$HOME/.local/bin" ]] && { claim "$HOME/.local/bin" || true; }
     claim "$HOME/.local/bin/agent-init" || true
   fi
   if (( INSTALL_OPERATOR )); then
-    [[ -L "$HOME/.claude/output-styles" ]] && { claim "$HOME/.claude/output-styles" || true; }
+    [[ -L "$CLAUDE_ROOT/output-styles" && ! -d "$CLAUDE_ROOT/output-styles" ]] && { claim "$CLAUDE_ROOT/output-styles" || true; }
     for f in "$REPO"/output-styles/*.md; do
-      [[ -f "$f" ]] && { claim "$HOME/.claude/output-styles/$(basename "$f")" || true; }
+      [[ -f "$f" ]] && { claim "$CLAUDE_ROOT/output-styles/$(basename "$f")" || true; }
     done
   fi
   if (( INSTALL_GUARD )); then
-    [[ -L "$HOME/.claude/hooks" ]] && { claim "$HOME/.claude/hooks" || true; }
+    [[ -L "$CLAUDE_ROOT/hooks" && ! -d "$CLAUDE_ROOT/hooks" ]] && { claim "$CLAUDE_ROOT/hooks" || true; }
     for f in "$REPO"/hooks/guard*.py; do
-      [[ -f "$f" ]] && { claim "$HOME/.claude/hooks/$(basename "$f")" || true; }
+      [[ -f "$f" ]] && { claim "$CLAUDE_ROOT/hooks/$(basename "$f")" || true; }
     done
   fi
 }
@@ -295,6 +289,45 @@ refuse_if_occupied() {
   printf '\n  Run those, then ./install.sh again.\n' >&2
   printf '  (Using stow or chezmoi? Unstow these paths first.)\n\n' >&2
   exit 1
+}
+
+CONFLICT_STATE="$HOME/.local/share/agent-config/conflicts.json"
+resolve_skill_conflicts() {
+  (( ${#SKILL_CONFLICTS[@]} )) || return 0
+  if (( CHECK )); then
+    warn "${#SKILL_CONFLICTS[@]} existing skill path(s) are kept and still available"
+    return 0
+  fi
+  if [[ "$CONFLICT_MODE" == auto ]]; then
+    if [[ "${AGENT_CONFIG_NONINTERACTIVE:-}" == 1 || ! -t 0 ]]; then
+      CONFLICT_MODE="keep"
+    else
+      printf '\n%d installed skill name(s) already exist.\n' "${#SKILL_CONFLICTS[@]}"
+      printf 'Keep them [K], back them up and use Agent Config [R], or cancel [C]? '
+      IFS= read -r answer
+      case "${answer:-K}" in
+        r|R) CONFLICT_MODE="replace" ;;
+        c|C) printf 'Cancelled. Nothing changed.\n'; exit 1 ;;
+        *) CONFLICT_MODE="keep" ;;
+      esac
+    fi
+  fi
+  if [[ "$CONFLICT_MODE" == replace ]]; then
+    python3 "$REPO/scripts/manage_conflicts.py" backup "$CONFLICT_STATE" \
+      "${SKILL_CONFLICTS[@]}" || die "could not back up conflicting skills"
+    ok "backed up ${#SKILL_CONFLICTS[@]} conflicting skill path(s) for uninstall"
+  else
+    warn "kept ${#SKILL_CONFLICTS[@]} existing skill path(s); installed everything else"
+  fi
+}
+
+kept_skill_conflict() {
+  local candidate="$1" conflict
+  [[ "$CONFLICT_MODE" == keep ]] || return 1
+  for conflict in "${SKILL_CONFLICTS[@]}"; do
+    [[ "$conflict" == "$candidate" ]] && return 0
+  done
+  return 1
 }
 
 # Prune links to skills this repo no longer ships. Both loops above iterate
@@ -357,14 +390,36 @@ link() {  # link <target> <linkname>
   ok "$name -> $target"
 }
 
+route_instructions() {  # route_instructions <host instruction path>
+  local path="$1" source="$REPO/templates/AGENTS.global.md"
+  if [[ ! -e "$path" && ! -L "$path" ]]; then
+    link "$source" "$path"
+    return
+  fi
+  if [[ -L "$path" ]] && _is_our_target "$(readlink "$path")"; then
+    link "$source" "$path"
+    return
+  fi
+  if (( CHECK )); then
+    python3 "$REPO/scripts/manage_instructions.py" check "$path" "$source" \
+      && ok "$path routing block" || err "$path routing block missing or stale"
+  else
+    python3 "$REPO/scripts/manage_instructions.py" merge "$path" "$source" \
+      || die "could not merge routing instructions into $path"
+    ok "$path preserved with Agent Config routing"
+  fi
+}
+
 # ---------------------------------------------------------------- preflight
 # Everything that could fail is checked BEFORE anything is written. A
 # half-install is worse than no install: it can leave CLAUDE.md promising
 # guardrails that were never wired.
-echo "agent-config $PROFILE profile at $REPO"
-(( CHECK )) && echo "(check only, nothing will change)"
-echo
-echo "Preflight"
+if (( ! COMPACT )); then
+  echo "agent-config $PROFILE profile at $REPO"
+  (( CHECK )) && echo "(check only, nothing will change)"
+  echo
+  echo "Preflight"
+fi
 
 GUARD_READY=1
 if (( INSTALL_GUARD )); then
@@ -393,29 +448,28 @@ fi
 # that is a directory makes `mv` move the temp file INTO it and report success
 # while Codex ends up with no guardrails at all.
 if (( INSTALL_GUARD )); then
-  for f in "$HOME/.claude/settings.json" "$HOME/.codex/hooks.json"; do
+  for f in "$CLAUDE_ROOT/settings.json" "$CODEX_ROOT/hooks.json"; do
     if [[ -e "$f" && ! -f "$f" ]]; then
       die "$f exists but is not a regular file. Move it aside first."
     fi
   done
-  if [[ -e "$HOME/.claude/hooks" && ! -d "$HOME/.claude/hooks" ]]; then
-    die "$HOME/.claude/hooks exists but is not a directory. Move it aside first."
+  if [[ -e "$CLAUDE_ROOT/hooks" && ! -d "$CLAUDE_ROOT/hooks" ]]; then
+    die "$CLAUDE_ROOT/hooks exists but is not a directory. Move it aside first."
   fi
   for f in hooks/guard_rules.py hooks/guard_parse.py hooks/guard_git.py \
            hooks/guard_repo.py hooks/guard_paths.py \
            hooks/guard_secrets.py hooks/guard_db.py hooks/guard_tools.py \
            hooks/guard-bash.py hooks/guard-files.py hooks/guard-codex.py \
-           hooks/tests.py hooks/floor.py scripts/install_settings.py \
-           scripts/install_codex_hooks.py; do
+           scripts/install_settings.py scripts/install_codex_hooks.py; do
     [[ -f "$REPO/$f" ]] || die "missing $f. Is this a complete clone?"
   done
   ok "guard scripts present"
 fi
 if (( INSTALL_WORKFLOW || INSTALL_OPERATOR )); then
-  if [[ -e "$HOME/.codex" && ! -d "$HOME/.codex" ]]; then
-    die "$HOME/.codex exists but is not a directory. Move it aside first."
+  if [[ -e "$CODEX_ROOT" && ! -d "$CODEX_ROOT" ]]; then
+    die "$CODEX_ROOT exists but is not a directory. Move it aside first."
   fi
-  for d in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+  for d in "$CLAUDE_ROOT/skills" "$CODEX_ROOT/skills"; do
     if [[ -e "$d" && ! -d "$d" ]]; then
       die "$d exists but is not a directory. Move it aside first."
     fi
@@ -436,8 +490,8 @@ if (( INSTALL_WORKFLOW )); then
   done
   ok "project instruction initializer present"
 fi
-if (( INSTALL_OPERATOR )) && [[ -e "$HOME/.claude/output-styles" && ! -d "$HOME/.claude/output-styles" ]]; then
-  die "$HOME/.claude/output-styles exists but is not a directory. Move it aside first."
+if (( INSTALL_OPERATOR )) && [[ -e "$CLAUDE_ROOT/output-styles" && ! -d "$CLAUDE_ROOT/output-styles" ]]; then
+  die "$CLAUDE_ROOT/output-styles exists but is not a directory. Move it aside first."
 fi
 if (( INSTALL_OPERATOR )); then
   for f in output-styles/eli5.md output-styles/terse.md \
@@ -447,33 +501,96 @@ if (( INSTALL_OPERATOR )); then
   done
   ok "operator communication profiles present"
 fi
-if (( INSTALL_BASELINE )) && [[ ! -f "$REPO/AGENTS.md" ]]; then
-  die "missing AGENTS.md required by --baseline. Is this a complete clone?"
+if (( INSTALL_BASELINE )) && [[ ! -f "$REPO/templates/AGENTS.global.md" ]]; then
+  die "missing templates/AGENTS.global.md. Is this a complete clone?"
 fi
+if (( INSTALL_BASELINE )); then
+  for f in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md"; do
+    if [[ -e "$f" || -L "$f" ]]; then
+      if [[ -L "$f" ]] && _is_our_target "$(readlink "$f")"; then
+        continue
+      fi
+      python3 "$REPO/scripts/manage_instructions.py" validate "$f" \
+        || die "$f has malformed Agent Config markers or is not a regular file. Fix it before installing."
+    fi
+  done
+fi
+
+require_writable_destination() {
+  local requested="$1" kind="${2:-file}" destination="$1" ancestor parent
+  if [[ -L "$destination" ]]; then
+    destination="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$destination")"
+  fi
+  if [[ -e "$destination" ]]; then
+    [[ -w "$destination" ]] \
+      || die "$requested is not writable. Nothing has been changed."
+    if [[ "$kind" == dir && ! -x "$destination" ]]; then
+      die "$requested is not searchable. Nothing has been changed."
+    fi
+    if [[ "$kind" == file ]]; then
+      parent="$(dirname "$destination")"
+      [[ -w "$parent" && -x "$parent" ]] \
+        || die "$requested cannot be updated atomically below $parent. Nothing has been changed."
+    fi
+    return
+  fi
+  ancestor="$(dirname "$destination")"
+  while [[ ! -e "$ancestor" ]]; do
+    [[ "$ancestor" == "$(dirname "$ancestor")" ]] && break
+    ancestor="$(dirname "$ancestor")"
+  done
+  [[ -d "$ancestor" && -w "$ancestor" && -x "$ancestor" ]] \
+    || die "$requested cannot be created below $ancestor. Nothing has been changed."
+}
 
 # Existing destination containers must be writable before the first link or
 # ownership record is created. Checking only ~/.claude missed a read-only
 # output-styles directory and left a partial operator installation behind.
 DESTINATION_DIRS=()
 if (( INSTALL_WORKFLOW || INSTALL_OPERATOR )); then
-  DESTINATION_DIRS+=("$HOME/.claude/skills")
-  [[ -d "$HOME/.codex" ]] && DESTINATION_DIRS+=("$HOME/.codex/skills")
+  DESTINATION_DIRS+=("$CLAUDE_ROOT/skills")
+  [[ -d "$CODEX_ROOT" ]] && DESTINATION_DIRS+=("$CODEX_ROOT/skills")
 fi
 (( INSTALL_WORKFLOW )) && DESTINATION_DIRS+=("$HOME/.local/bin")
-(( INSTALL_OPERATOR )) && DESTINATION_DIRS+=("$HOME/.claude/output-styles")
-(( INSTALL_GUARD )) && DESTINATION_DIRS+=("$HOME/.claude/hooks")
+(( INSTALL_OPERATOR )) && DESTINATION_DIRS+=("$CLAUDE_ROOT/output-styles")
+(( INSTALL_GUARD )) && DESTINATION_DIRS+=("$CLAUDE_ROOT/hooks")
 for d in "${DESTINATION_DIRS[@]}"; do
   if [[ -d "$d" && ! -w "$d" ]]; then
     die "$d is not writable. Nothing has been changed."
   fi
 done
 
+# Missing custom roots and symlinked instruction files need the same preflight.
+# Otherwise Claude can be fully wired before a later Codex mkdir or instruction
+# merge discovers its destination is read-only.
+if (( ! CHECK )); then
+  require_writable_destination "$CLAUDE_ROOT" dir
+  require_writable_destination "$ORIGINS"
+  (( INSTALL_GUARD )) && {
+    require_writable_destination "$CLAUDE_ROOT/settings.json"
+    require_writable_destination "$CLAUDE_ROOT/hooks" dir
+    require_writable_destination "$CODEX_ROOT" dir
+    require_writable_destination "$CODEX_ROOT/hooks.json"
+  }
+  (( INSTALL_WORKFLOW || INSTALL_OPERATOR )) && {
+    require_writable_destination "$CLAUDE_ROOT/skills" dir
+    require_writable_destination "$CODEX_ROOT" dir
+    require_writable_destination "$CODEX_ROOT/skills" dir
+  }
+  (( INSTALL_WORKFLOW )) && require_writable_destination "$HOME/.local/bin" dir
+  (( INSTALL_OPERATOR )) && require_writable_destination "$CLAUDE_ROOT/output-styles" dir
+  if (( INSTALL_BASELINE )); then
+    require_writable_destination "$CLAUDE_ROOT/CLAUDE.md"
+    require_writable_destination "$CODEX_ROOT/AGENTS.md"
+  fi
+fi
+
 # Codex hooks.json is shared configuration, just like Claude settings.json.
 # Validate it before any mutation so a malformed user file cannot leave a
 # half-install after the Claude half has already been wired.
-if (( INSTALL_GUARD && GUARD_READY )) && [[ -f "$HOME/.codex/hooks.json" ]]; then
-  python3 "$REPO/scripts/install_codex_hooks.py" validate "$HOME/.codex/hooks.json" \
-    || die "$HOME/.codex/hooks.json is not valid hook configuration. Fix or move it first; this script will not rewrite a file whose shape it does not understand."
+if (( INSTALL_GUARD && GUARD_READY )) && [[ -f "$CODEX_ROOT/hooks.json" ]]; then
+  python3 "$REPO/scripts/install_codex_hooks.py" validate "$CODEX_ROOT/hooks.json" \
+    || die "$CODEX_ROOT/hooks.json is not valid hook configuration. Fix or move it first; this script will not rewrite a file whose shape it does not understand."
   ok "existing Codex hooks.json parses and has the expected shape"
 fi
 
@@ -510,50 +627,35 @@ if (( INSTALL_OPERATOR )); then
 fi
 
 if (( ! CHECK )); then
-  mkdir -p "$HOME/.claude" 2>/dev/null || die "cannot create $HOME/.claude (is HOME read-only?)"
-  touch "$HOME/.claude/.agent-config-write-test" 2>/dev/null \
-    || die "$HOME/.claude is not writable. Nothing has been changed."
-  rm -f "$HOME/.claude/.agent-config-write-test"
+  mkdir -p "$CLAUDE_ROOT" 2>/dev/null || die "cannot create $CLAUDE_ROOT (is HOME read-only?)"
+  touch "$CLAUDE_ROOT/.agent-config-write-test" 2>/dev/null \
+    || die "$CLAUDE_ROOT is not writable. Nothing has been changed."
+  rm -f "$CLAUDE_ROOT/.agent-config-write-test"
   touch "$HOME/.agent-config-write-test" 2>/dev/null \
     || die "$HOME is not writable. Nothing has been changed."
   rm -f "$HOME/.agent-config-write-test"
   # ~/.codex too, or the Claude half completes and the Codex half aborts under
   # set -e, which is exactly the half-install the preflight promises to prevent.
-  if [[ -d "$HOME/.codex" ]]; then
-    touch "$HOME/.codex/.agent-config-write-test" 2>/dev/null \
-      || die "$HOME/.codex is not writable. Nothing has been changed."
-    rm -f "$HOME/.codex/.agent-config-write-test"
+  if [[ -d "$CODEX_ROOT" ]]; then
+    touch "$CODEX_ROOT/.agent-config-write-test" 2>/dev/null \
+      || die "$CODEX_ROOT is not writable. Nothing has been changed."
+    rm -f "$CODEX_ROOT/.agent-config-write-test"
   fi
   ok "HOME is writable"
 fi
 
-if (( INSTALL_GUARD )) && [[ -L "$HOME/.claude/settings.json" && ! -e "$HOME/.claude/settings.json" ]]; then
-  die "$HOME/.claude/settings.json is a symlink pointing at something that does not exist. Fix or remove it first; installing over it would leave the hooks unwired."
+if (( INSTALL_GUARD )) && [[ -L "$CLAUDE_ROOT/settings.json" && ! -e "$CLAUDE_ROOT/settings.json" ]]; then
+  die "$CLAUDE_ROOT/settings.json is a symlink pointing at something that does not exist. Fix or remove it first; installing over it would leave the hooks unwired."
 fi
 
 if (( INSTALL_GUARD && GUARD_READY )); then
-  python3 "$REPO/scripts/install_settings.py" validate "$HOME/.claude/settings.json" 2>/dev/null \
-    || die "$HOME/.claude/settings.json or its agent-config ownership state is invalid. Fix or move it first; this script will not rewrite state whose shape it does not understand."
-  [[ -f "$HOME/.claude/settings.json" ]] \
+  python3 "$REPO/scripts/install_settings.py" validate "$CLAUDE_ROOT/settings.json" 2>/dev/null \
+    || die "$CLAUDE_ROOT/settings.json or its agent-config ownership state is invalid. Fix or move it first; this script will not rewrite state whose shape it does not understand."
+  [[ -f "$CLAUDE_ROOT/settings.json" ]] \
     && ok "existing settings.json parses and has the expected shape"
 fi
 
-# Correctness gates the install. The wall-clock budgets do not: they flake on
-# a loaded machine, and aborting there told the adopter the checkout was broken
-# when re-running the suggested command immediately printed PASS.
-if (( INSTALL_GUARD && GUARD_READY )) && ! SUITE_OUT="$(python3 "$REPO/hooks/tests.py" --no-perf 2>&1)"; then
-  die "guard regression suite fails in this checkout:
-$SUITE_OUT"
-fi
-(( INSTALL_GUARD && GUARD_READY )) && ok "guard tests pass"
-
-# The second suite grades the guard against the job rather than its own rules,
-# which is why it catches whole classes the rule-level suite never looked for.
-if (( INSTALL_GUARD && GUARD_READY )) && ! FLOOR_OUT="$(python3 "$REPO/hooks/floor.py" 2>&1)"; then
-  die "guard floor suite fails in this checkout:
-$FLOOR_OUT"
-fi
-(( INSTALL_GUARD && GUARD_READY )) && ok "guard floor holds"
+resolve_skill_conflicts
 
 # Auto mode is all-or-nothing across hosts. If the user has replaced one
 # instruction path since an earlier install, remove our remaining sibling link
@@ -567,7 +669,7 @@ if (( REMOVE_AUTO_BASELINE )); then
       err "global instructions are split: one host still uses agent-config while the other is user-owned"
     fi
   else
-    for p in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md"; do
+    for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md"; do
       if [[ -L "$p" ]] && _is_our_target "$(readlink "$p")"; then
         rm "$p"
         warn "removed agent-config baseline at $p so both hosts preserve user-owned instructions"
@@ -596,66 +698,67 @@ if (( INSTALL_WORKFLOW )); then
   link "$REPO/scripts/agent-init" "$HOME/.local/bin/agent-init"
   case ":${PATH:-}:" in
     *:"$HOME/.local/bin":*) ;;
-    *) warn "$HOME/.local/bin is not on PATH; run $HOME/.local/bin/agent-init directly or add that directory to PATH." ;;
+    *) detail_warn "$HOME/.local/bin is not on PATH; run $HOME/.local/bin/agent-init directly or add that directory to PATH." ;;
   esac
 fi
 
 # ---------------------------------------------------------------- claude code
-echo
-echo "Claude Code"
+section "Claude Code"
 if (( INSTALL_WORKFLOW || INSTALL_OPERATOR )); then
-(( CHECK )) || mkdir -p "$HOME/.claude/skills"
+(( CHECK )) || mkdir -p "$CLAUDE_ROOT/skills"
 # Link each skill individually rather than replacing ~/.claude/skills wholesale.
 # Taking over the directory would silently stop any skill the user wrote
 # themselves, which is not a trade an installer gets to make on their behalf.
-if [[ -L "$HOME/.claude/skills" ]]; then
-  # A dotfile manager pointing the whole directory elsewhere was refused by
-  # preflight, so this can only be an older install of ours.
-  (( CHECK )) || { rm "$HOME/.claude/skills"; mkdir -p "$HOME/.claude/skills"; }
-fi
 n=0; missing=0
 for root in "${SKILL_ROOTS[@]}"; do
   for d in "$root"/*/; do
     [[ -f "$d/SKILL.md" ]] || continue
     name="$(basename "$d")"
     if (( CHECK )); then
-      [[ -L "$HOME/.claude/skills/$name" && "$(readlink "$HOME/.claude/skills/$name")" == "$d" ]] \
-        || { err "claude skill $name not linked to this repo"; missing=1; }
-    else
-      if [[ -L "$HOME/.claude/skills/$name" && "$(readlink "$HOME/.claude/skills/$name")" == "$d" ]]; then
-        : # already ours; do NOT re-record it as if it were the user's
-      elif [[ -e "$HOME/.claude/skills/$name" || -L "$HOME/.claude/skills/$name" ]]; then
-        # Ours from a previous clone location: preflight refused anything
-        # that is not ours, so this can only be our own stale link.
-        rm -f "$HOME/.claude/skills/$name"
+      if [[ -L "$CLAUDE_ROOT/skills/$name" && "$(readlink "$CLAUDE_ROOT/skills/$name")" == "$d" ]]; then
+        :
+      elif [[ -f "$CLAUDE_ROOT/skills/$name/SKILL.md" ]]; then
+        warn "claude skill $name is provided by an existing installation"
+      else
+        err "claude skill $name missing"; missing=1
       fi
-      ln -sfn "$d" "$HOME/.claude/skills/$name"; n=$((n+1))
+    else
+      kept_skill_conflict "$CLAUDE_ROOT/skills/$name" && continue
+      if [[ -L "$CLAUDE_ROOT/skills/$name" && "$(readlink "$CLAUDE_ROOT/skills/$name")" == "$d" ]]; then
+        : # already ours; do NOT re-record it as if it were the user's
+      elif [[ -L "$CLAUDE_ROOT/skills/$name" && ! -e "$CLAUDE_ROOT/skills/$name" ]]; then
+        rm "$CLAUDE_ROOT/skills/$name"
+      elif [[ -e "$CLAUDE_ROOT/skills/$name" || -L "$CLAUDE_ROOT/skills/$name" ]]; then
+        if _is_our_target "$(readlink "$CLAUDE_ROOT/skills/$name" 2>/dev/null || true)"; then
+          rm -f "$CLAUDE_ROOT/skills/$name"
+        else
+          continue
+        fi
+      fi
+      ln -sfn "$d" "$CLAUDE_ROOT/skills/$name"; n=$((n+1))
     fi
   done
 done
-prune_selected_skills "$HOME/.claude/skills"
+prune_selected_skills "$CLAUDE_ROOT/skills"
 (( CHECK )) && (( ! missing )) && ok "all skills linked into ~/.claude/skills"
 (( CHECK )) || ok "$n skills linked into ~/.claude/skills (your own are untouched)"
 
 fi
 
 if (( INSTALL_OPERATOR )); then
-  (( CHECK )) || mkdir -p "$HOME/.claude/output-styles"
-  if [[ -L "$HOME/.claude/output-styles" ]]; then
-    (( CHECK )) || { rm "$HOME/.claude/output-styles"; mkdir -p "$HOME/.claude/output-styles"; }
-  fi
+  (( CHECK )) || mkdir -p "$CLAUDE_ROOT/output-styles"
   sn=0; style_missing=0
   for f in "$REPO"/output-styles/*.md; do
     [[ -f "$f" ]] || continue
     name="$(basename "$f")"
     if (( CHECK )); then
-      [[ -L "$HOME/.claude/output-styles/$name" \
-         && "$(readlink "$HOME/.claude/output-styles/$name")" == "$f" ]] \
+      [[ -L "$CLAUDE_ROOT/output-styles/$name" \
+         && "$(readlink "$CLAUDE_ROOT/output-styles/$name")" == "$f" ]] \
         || { err "Claude output style $name not linked to this repo"; style_missing=1; }
     else
-      [[ -e "$HOME/.claude/output-styles/$name" || -L "$HOME/.claude/output-styles/$name" ]] \
-        && rm -f "$HOME/.claude/output-styles/$name"
-      ln -s "$f" "$HOME/.claude/output-styles/$name"; sn=$((sn+1))
+      [[ -e "$CLAUDE_ROOT/output-styles/$name" || -L "$CLAUDE_ROOT/output-styles/$name" ]] \
+        && rm -f "$CLAUDE_ROOT/output-styles/$name"
+      ln -s "$f" "$CLAUDE_ROOT/output-styles/$name"; sn=$((sn+1))
     fi
   done
   (( CHECK )) && (( ! style_missing )) && ok "all Claude output styles linked"
@@ -668,11 +771,7 @@ if (( INSTALL_GUARD )); then
 # their entry, so a now-missing script makes python3 exit 2, and exit 2 in
 # PreToolUse means BLOCK. Replacing the directory would turn their own hook
 # into a block-everything rule.
-(( CHECK )) || mkdir -p "$HOME/.claude/hooks"
-if [[ -L "$HOME/.claude/hooks" ]]; then
-  # Someone else's link here was refused by preflight; ours is safe to replace.
-  (( CHECK )) || { rm "$HOME/.claude/hooks"; mkdir -p "$HOME/.claude/hooks"; }
-fi
+(( CHECK )) || mkdir -p "$CLAUDE_ROOT/hooks"
 hn=0
 # guard*.py includes the host entry points and every module they import.
 # Anything added here needs a matching --check assertion below.
@@ -680,70 +779,51 @@ for f in "$REPO"/hooks/guard*.py; do
   [[ -e "$f" ]] || continue
   base="$(basename "$f")"
   if (( CHECK )); then
-    [[ -L "$HOME/.claude/hooks/$base" && "$(readlink "$HOME/.claude/hooks/$base")" == "$f" ]] \
+    [[ -L "$CLAUDE_ROOT/hooks/$base" && "$(readlink "$CLAUDE_ROOT/hooks/$base")" == "$f" ]] \
       || err "hook $base not linked to this repo"
   else
-    if [[ -L "$HOME/.claude/hooks/$base" && "$(readlink "$HOME/.claude/hooks/$base")" == "$f" ]]; then
+    if [[ -L "$CLAUDE_ROOT/hooks/$base" && "$(readlink "$CLAUDE_ROOT/hooks/$base")" == "$f" ]]; then
       : # already ours
-    elif [[ -e "$HOME/.claude/hooks/$base" || -L "$HOME/.claude/hooks/$base" ]]; then
-      rm -f "$HOME/.claude/hooks/$base"
+    elif [[ -e "$CLAUDE_ROOT/hooks/$base" || -L "$CLAUDE_ROOT/hooks/$base" ]]; then
+      rm -f "$CLAUDE_ROOT/hooks/$base"
     fi
-    ln -sfn "$f" "$HOME/.claude/hooks/$base"; hn=$((hn+1))
+    ln -sfn "$f" "$CLAUDE_ROOT/hooks/$base"; hn=$((hn+1))
   fi
 done
-prune_stale "$HOME/.claude/hooks" hooks hooks
+prune_stale "$CLAUDE_ROOT/hooks" hooks hooks
 (( CHECK )) || ok "$hn hook scripts linked into ~/.claude/hooks (your own are untouched)"
 
 # settings.json also holds the user's model, theme, and permissions, so it is
 # merged rather than replaced. The `test -f` prefix means that deleting this
 # repo degrades to "no guardrails" instead of blocking every tool call: a
 # missing script makes python3 exit 2, and exit 2 in PreToolUse means BLOCK.
-SETTINGS="$HOME/.claude/settings.json"
+SETTINGS="$CLAUDE_ROOT/settings.json"
 if (( GUARD_READY && ! CHECK )); then
   # One copy, once, before the first change. Not per-run: repeated installs
   # used to pile up identical backups.
   if [[ -f "$SETTINGS" && ! -e "$SETTINGS.before-agent-config" ]]; then
     cp "$SETTINGS" "$SETTINGS.before-agent-config"
-    warn "settings.json copied to settings.json.before-agent-config"
+    detail_warn "settings.json copied to settings.json.before-agent-config"
   fi
   # The merge lives in scripts/install_settings.py, with a test suite that
   # runs in milliseconds. It was 115 lines of Python inside this heredoc,
   # reachable only by running a real install into a fake HOME.
-  python3 "$REPO/scripts/install_settings.py" merge "$SETTINGS"
+  python3 "$REPO/scripts/install_settings.py" merge "$SETTINGS" "$CLAUDE_ROOT/hooks"
   ok "settings.json PreToolUse hooks (existing keys preserved)"
 elif (( GUARD_READY )); then
   # The same test the merge uses. A substring match called a hook that merely
   # MENTIONS the path "wired", and it never looked at the file matcher at all,
   # so --check said "all good" on a HOME with no guardrails running.
-  python3 - "$SETTINGS" <<'PYCHECK' 2>/dev/null \
+  python3 "$REPO/scripts/install_settings.py" check "$SETTINGS" "$CLAUDE_ROOT/hooks" \
     && ok "settings.json guard hooks" || err "settings.json guard hooks missing or not wired"
-import json, re, sys
-try:
-    cfg = json.load(open(sys.argv[1]))
-except Exception:
-    raise SystemExit(1)
-R = re.compile(r"python3?\s+\S*[./]claude/hooks/guard-(bash|files)\.py(\s|;|$)")
-found = set()
-for entry in cfg.get("hooks", {}).get("PreToolUse", []):
-    if not isinstance(entry, dict):
-        continue
-    for h in entry.get("hooks", []):
-        m = R.search(str(h.get("command", ""))) if isinstance(h, dict) else None
-        if m:
-            found.add(m.group(1))
-raise SystemExit(0 if found == {"bash", "files"} else 1)
-PYCHECK
 fi
 fi
 
-if (( INSTALL_BASELINE )); then
-  link "$REPO/AGENTS.md" "$HOME/.claude/CLAUDE.md"
-fi
+(( INSTALL_BASELINE )) && route_instructions "$CLAUDE_ROOT/CLAUDE.md"
 
 # ---------------------------------------------------------------------- codex
-echo
-echo "Codex"
-if [[ -d "$HOME/.codex" ]] || (( INSTALL_WORKFLOW )); then
+section "Codex"
+if [[ -d "$CODEX_ROOT" ]] || (( INSTALL_WORKFLOW )); then
   if (( INSTALL_WORKFLOW || INSTALL_OPERATOR )); then
   # Codex owns ~/.codex/skills: it preinstalls its own .system skills there,
   # so link each skill individually instead of replacing the directory.
@@ -751,45 +831,54 @@ if [[ -d "$HOME/.codex" ]] || (( INSTALL_WORKFLOW )); then
   # record the target and stand a real directory up. Without this, install
   # dropped one symlink per skill straight into the user's stow tree and
   # uninstall could never clean them out.
-  if [[ -L "$HOME/.codex/skills" ]]; then
-    (( CHECK )) || { rm "$HOME/.codex/skills"; }
-  fi
-  (( CHECK )) || mkdir -p "$HOME/.codex/skills"
+  (( CHECK )) || mkdir -p "$CODEX_ROOT/skills"
   n=0; missing=0
   for root in "${SKILL_ROOTS[@]}"; do
     for d in "$root"/*/; do
       [[ -f "$d/SKILL.md" ]] || continue
       name="$(basename "$d")"
       if (( CHECK )); then
-        [[ -L "$HOME/.codex/skills/$name" && "$(readlink "$HOME/.codex/skills/$name")" == "$d" ]] \
-          || { err "codex skill $name not linked to this repo"; missing=1; }
-      else
-        if [[ -L "$HOME/.codex/skills/$name" && "$(readlink "$HOME/.codex/skills/$name")" == "$d" ]]; then
-          : # already ours
-        elif [[ -e "$HOME/.codex/skills/$name" || -L "$HOME/.codex/skills/$name" ]]; then
-          rm -f "$HOME/.codex/skills/$name"
+        if [[ -L "$CODEX_ROOT/skills/$name" && "$(readlink "$CODEX_ROOT/skills/$name")" == "$d" ]]; then
+          :
+        elif [[ -f "$CODEX_ROOT/skills/$name/SKILL.md" ]]; then
+          warn "codex skill $name is provided by an existing installation"
+        else
+          err "codex skill $name missing"; missing=1
         fi
-        ln -sfn "$d" "$HOME/.codex/skills/$name"; n=$((n+1))
+      else
+        kept_skill_conflict "$CODEX_ROOT/skills/$name" && continue
+        if [[ -L "$CODEX_ROOT/skills/$name" && "$(readlink "$CODEX_ROOT/skills/$name")" == "$d" ]]; then
+          : # already ours
+        elif [[ -L "$CODEX_ROOT/skills/$name" && ! -e "$CODEX_ROOT/skills/$name" ]]; then
+          rm "$CODEX_ROOT/skills/$name"
+        elif [[ -e "$CODEX_ROOT/skills/$name" || -L "$CODEX_ROOT/skills/$name" ]]; then
+          if _is_our_target "$(readlink "$CODEX_ROOT/skills/$name" 2>/dev/null || true)"; then
+            rm -f "$CODEX_ROOT/skills/$name"
+          else
+            continue
+          fi
+        fi
+        ln -sfn "$d" "$CODEX_ROOT/skills/$name"; n=$((n+1))
       fi
     done
   done
-  prune_selected_skills "$HOME/.codex/skills"
+  prune_selected_skills "$CODEX_ROOT/skills"
   (( CHECK )) && (( ! missing )) && ok "all skills linked into ~/.codex/skills"
   (( CHECK )) || ok "$n skills linked into ~/.codex/skills"
-  (( INSTALL_BASELINE )) && link "$REPO/AGENTS.md" "$HOME/.codex/AGENTS.md"
+  (( INSTALL_BASELINE )) && route_instructions "$CODEX_ROOT/AGENTS.md"
   fi
 
   if (( INSTALL_GUARD )); then
-    CODEX_HOOKS="$HOME/.codex/hooks.json"
+    CODEX_HOOKS="$CODEX_ROOT/hooks.json"
     if (( GUARD_READY && ! CHECK )); then
       if [[ -f "$CODEX_HOOKS" && ! -e "$CODEX_HOOKS.before-agent-config" ]]; then
         cp "$CODEX_HOOKS" "$CODEX_HOOKS.before-agent-config"
-        warn "hooks.json copied to hooks.json.before-agent-config"
+        detail_warn "hooks.json copied to hooks.json.before-agent-config"
       fi
       python3 "$REPO/scripts/install_codex_hooks.py" merge "$CODEX_HOOKS" "$REPO" \
         || die "could not merge agent-config hooks into $CODEX_HOOKS"
       ok "hooks.json PreToolUse guard merged (existing hooks preserved)"
-      warn "review and trust new or changed Codex hooks with /hooks."
+      detail_warn "review and trust new or changed Codex hooks with /hooks."
     elif (( GUARD_READY )); then
       # A deleted Codex hook must not report "all good".
       if python3 "$REPO/scripts/install_codex_hooks.py" check "$CODEX_HOOKS" "$REPO"; then
@@ -799,22 +888,33 @@ if [[ -d "$HOME/.codex" ]] || (( INSTALL_WORKFLOW )); then
       fi
       # Trust is keyed to each current hook definition and is intentionally not
       # inferred from private config internals. /hooks is the supported view.
-      warn "hook trust is user-reviewed state; inspect it with /hooks."
+      detail_warn "hook trust is user-reviewed state; inspect it with /hooks."
     fi
   fi
 else
   warn "no ~/.codex, skipping Codex operator or guard wiring"
 fi
 
-echo
+(( COMPACT )) || echo
 if (( CHECK )); then
   if (( PROBLEMS )); then
     echo "Check complete: $PROBLEMS problem(s). Run ./install.sh $PROFILE to fix."
     exit 1
   fi
-  echo "Check complete: all good."
+  if [[ "$PROFILE" == standard || "$PROFILE" == full ]]; then
+    status "Guard active"
+    status "Workflow active: 13/13"
+    status "Claude Code + Codex routing active"
+  else
+    echo "Check complete: all good."
+  fi
 else
-  if [[ "$PROFILE" == guard ]]; then
+  if [[ "$PROFILE" == standard || "$PROFILE" == full ]]; then
+    status "Guard active"
+    status "Workflow active: 13/13"
+    status "Claude Code + Codex routing active"
+    warn "Restart your agent, then review Codex hooks with /hooks"
+  elif [[ "$PROFILE" == guard ]]; then
     echo "Done. Review hook trust in each host, then start a new agent session."
   elif [[ "$PROFILE" == workflow ]]; then
     echo "Done. Start a new agent session to pick up the workflow skills."
@@ -823,7 +923,7 @@ else
   else
     echo "Done. Review hook trust, then start a new agent session."
   fi
-  echo "To remove: $REPO/uninstall.sh"
+  (( COMPACT )) || echo "To remove: $REPO/uninstall.sh"
 fi
 
 exit 0

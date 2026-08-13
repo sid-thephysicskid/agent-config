@@ -1,93 +1,56 @@
 # agent-config
 
-Guardrails and software-delivery skills for Claude Code and Codex.
-
-Skills guide how an agent works. The guard blocks common high-impact mistakes
-before a tool runs.
-
-The package ships 13 workflow skills and 3 optional operator skills.
+One install gives Claude Code and Codex the same software-delivery workflow and
+blocks common destructive mistakes.
 
 ## Install
 
-Choose one profile:
-
 ```bash
-npx @sid-thephysicskid/agent-config@latest install guard
-npx @sid-thephysicskid/agent-config@latest install workflow
-npx @sid-thephysicskid/agent-config@latest install operator
-npx @sid-thephysicskid/agent-config@latest install full
+npx @sid-thephysicskid/agent-config@latest install
 ```
 
-| Profile | Installs |
-|---|---|
-| `guard` | Safety hooks only. This is the default. |
-| `workflow` | Shared agent instructions and 13 delivery skills. |
-| `operator` | Three optional skills and concise output styles. |
-| `full` | Everything above. |
+That installs:
 
-macOS and Linux are supported. Installation requires Node 18 or newer. The
-guard also requires Python 3.8 or newer. Codex asks you to approve installed
+- guardrails for destructive Git, filesystem, credential, database, and deploy actions;
+- 13 workflow skills;
+- automatic skill routing for Claude Code and Codex;
+- `agent-init` for shared project instructions.
+
+Restart your coding agent after installation. Codex will ask you to review new
 hooks in `/hooks`.
 
-Check or remove an installation:
+macOS and Linux are supported. You need Node 18 or newer and Python 3.8 or newer.
+
+### Existing setups
+
+The installer scans first, then adds only what it owns.
+
+- Existing hooks, settings, instructions, and unrelated skills stay in place.
+- Existing instruction files receive one removable Agent Config block.
+- A same-name skill is kept by default in non-interactive installs. In a
+  terminal, one prompt lets you keep all conflicts or back them up and use this package.
+- Re-running the command repairs or upgrades the installation.
+- If installation cannot complete safely, it stops before wiring the package.
+
+To choose conflict behavior up front:
 
 ```bash
-npx @sid-thephysicskid/agent-config@latest doctor guard
-npx @sid-thephysicskid/agent-config@latest uninstall guard
+npx @sid-thephysicskid/agent-config@latest install --keep-existing
+npx @sid-thephysicskid/agent-config@latest install --replace-conflicts
 ```
 
-The installer refuses occupied paths instead of overwriting them.
-
-<details>
-<summary><strong>Install from source</strong></summary>
-
-```bash
-git clone https://github.com/sid-thephysicskid/agent-config.git
-cd agent-config
-./install.sh guard
-```
-
-Use `workflow`, `operator`, or `full` to install another profile. Keep the
-checkout in place while it is installed; the source installer uses symlinks.
-
-</details>
-
-## How it works
+## How the agent uses it
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" width="920" alt="Project instructions and a matching skill guide the coding agent. Before a tool runs, the guard either allows it or blocks it with a safer route.">
+  <img src="docs/assets/how-it-works.svg" width="920" alt="Shared instructions route a task to a matching workflow skill. Before an action runs, the guard allows it or blocks it with a safer route.">
 </p>
 
-Workflow skills shape the agent's plan. The guard checks the proposed action
-immediately before execution. Either layer can be installed on its own.
+The installer puts the same routing instructions where Claude Code and Codex
+load them. On a clean machine, both files point to one shared source. If you
+already have instructions, the installer adds the same bounded block to each.
 
-## Guard
-
-The guard blocks common high-impact mistakes involving:
-
-- protected Git branches and destructive history changes;
-- live credential files;
-- broad filesystem deletion;
-- destructive or production-looking database commands;
-- direct production deploys and irreversible infrastructure actions;
-- writes to Git internals or the guard's own files.
-
-```console
-$ git push origin main
-BLOCKED: pushing directly at 'main'.
-
-Do this instead: push your feature branch and open a PR
-```
-
-A refusal explains the problem and suggests a safer route.
-
-The guard is a safety net, not a sandbox. It uses text analysis, fails open on
-internal errors, and cannot stop deliberate evasion. Keep branch protection,
-least-privilege credentials, database roles, backups, CI, and human review.
-
-## Workflow
-
-The agent selects the smallest skill that matches the current task:
+The agent enters at the stage your task needs. It does not run every skill as a
+waterfall:
 
 ```text
 navigate → prototype → bootstrap/setup → to-spec → breakdown
@@ -96,10 +59,9 @@ navigate → prototype → bootstrap/setup → to-spec → breakdown
 
 `unstick` handles merge and rebase conflicts.
 
-<details>
-<summary><strong>Skills</strong></summary>
+The package ships 13 workflow skills and 3 optional operator skills.
 
-| Skill | Purpose |
+| Skill | Use it for |
 |---|---|
 | `navigate` | Make or challenge a decision. |
 | `prototype` | Test one unresolved question. |
@@ -108,46 +70,76 @@ navigate → prototype → bootstrap/setup → to-spec → breakdown
 | `to-spec` | Capture decided behavior and acceptance criteria. |
 | `breakdown` | Create independently shippable work items. |
 | `domain-modeling` | Define business language, rules, states, and ownership. |
-| `architect` | Design a module or rank architecture improvements. |
-| `tdd` | Implement behavior test-first. |
+| `architect` | Design a module, seam, migration, or boundary. |
+| `tdd` | Implement testable behavior in small cycles. |
 | `diagnose` | Find a root cause with evidence. |
-| `review` | Review correctness, requirements, security, and maintainability. |
+| `review` | Review correctness, security, and maintainability. |
 | `unstick` | Resolve Git conflicts without discarding intent. |
 | `ship` | Verify and deliver authorized work. |
 
-The optional operator profile adds `research`, `wizard`, and `handoff`.
+### Project instructions
 
-</details>
+For a new project, `bootstrap` creates a real root `AGENTS.md` and a relative
+`CLAUDE.md -> AGENTS.md` symlink. `setup` does the same when adopting an existing
+repository. Both agents then read one project contract.
 
-## Shared project instructions
-
-The workflow profile points Claude Code and Codex at the same global
-instructions. To create the same arrangement inside a project, run:
+You can also create it directly:
 
 ```bash
 npx @sid-thephysicskid/agent-config@latest init
 ```
 
-This creates a real `AGENTS.md` and a relative `CLAUDE.md -> AGENTS.md` symlink.
-Existing files are preserved; conflicts are reported and left untouched.
+Existing project instruction files are never replaced.
 
-## Verification
+## Guard
 
-Run the same checks as CI:
+The guard checks an action immediately before it runs:
 
-```bash
-./scripts/ci-local
-./scripts/ci-local --full
+```console
+$ git push origin main
+BLOCKED: pushing directly at 'main'.
+
+Do this instead: push your feature branch and open a PR
 ```
 
-The suite covers guard rules and nearby safe commands, isolated installs,
-uninstall behavior, npm packaging, plugin contents, and skill structure. The
-[evaluation plan](evals/README.md) tracks outcome testing for the skills.
+It is a safety net, not a sandbox. Keep branch protection, least-privilege
+credentials, database roles, backups, CI, and human review.
+
+## Optional extras
+
+Add `research`, `wizard`, `handoff`, and concise output styles:
+
+```bash
+npx @sid-thephysicskid/agent-config@latest install --extras
+```
+
+## Check or remove
+
+```bash
+npx @sid-thephysicskid/agent-config@latest doctor
+npx @sid-thephysicskid/agent-config@latest uninstall
+```
+
+Uninstall removes Agent Config links, hook entries, instruction blocks, and
+deny rules. A conflicting skill replaced during install is restored from its backup.
+
+<details>
+<summary><strong>Install from source</strong></summary>
+
+```bash
+git clone https://github.com/sid-thephysicskid/agent-config.git
+cd agent-config
+./install.sh standard
+```
+
+Keep the checkout in place while installed. Source installs use symlinks.
+
+</details>
 
 ## Credit
 
-Some skills are adapted from [Matt Pocock's open-source skills](https://github.com/mattpocock/skills).
-See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for attribution and licenses.
+Some skills adapt work from [Matt Pocock's open-source skills](https://github.com/mattpocock/skills).
+See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for licenses and attribution.
 
 ## License
 

@@ -7,6 +7,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -39,7 +40,7 @@ const payload = [
   "uninstall.sh",
 ];
 
-const profiles = new Set(["guard", "workflow", "operator", "full"]);
+const profiles = new Set(["guard", "workflow", "operator", "full", "standard"]);
 const installRoot = join(homedir(), ".local", "share", "agent-config");
 const versionRoot = join(installRoot, version);
 
@@ -51,23 +52,24 @@ function fail(message) {
 function help() {
   process.stdout.write(`agent-config ${version}\n\n`);
   process.stdout.write("Usage:\n");
-  process.stdout.write("  agent-config install [guard|workflow|operator|full] [--baseline|--skills-only]\n");
-  process.stdout.write("  agent-config doctor [guard|workflow|operator|full]\n");
+  process.stdout.write("  agent-config install [--extras] [--keep-existing|--replace-conflicts]\n");
+  process.stdout.write("  agent-config doctor [--extras]\n");
   process.stdout.write("  agent-config init\n");
-  process.stdout.write("  agent-config uninstall [guard|workflow|operator|full]\n\n");
-  process.stdout.write("No install profile means guard. No doctor or uninstall profile means full.\n");
+  process.stdout.write("  agent-config uninstall\n\n");
+  process.stdout.write("Install adds guardrails, 13 workflow skills, and automatic routing.\n");
+  process.stdout.write("Use --extras to add research, wizard, handoff, and output styles.\n");
 }
 
 function assertPlatform() {
   if (process.platform === "win32") {
-    fail("native Windows is not supported in 0.1. Use macOS or Linux");
+    fail("native Windows is not supported. Use macOS or Linux");
   }
 }
 
-function run(script, args, cwd = process.cwd()) {
+function run(script, args, cwd = process.cwd(), extraEnv = {}) {
   execFileSync("bash", [script, ...args], {
     cwd,
-    env: process.env,
+    env: { ...process.env, ...extraEnv },
     stdio: "inherit",
   });
 }
@@ -143,7 +145,8 @@ function parseProfile(args, fallback) {
 
 function installedRoot() {
   const candidates = [versionRoot];
-  const origins = join(homedir(), ".claude", ".agent-config-origins");
+  const claudeRoot = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+  const origins = join(claudeRoot, ".agent-config-origins");
   if (existsSync(origins)) {
     candidates.push(...readFileSync(origins, "utf8").split(/\r?\n/).filter(Boolean).reverse());
   }
@@ -152,22 +155,53 @@ function installedRoot() {
   );
 }
 
+function extrasInstalled() {
+  const claudeRoot = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+  const candidates = [
+    ...["research", "wizard", "handoff"].map((name) =>
+      join(claudeRoot, "skills", name)),
+    join(claudeRoot, "output-styles", "terse.md"),
+  ];
+  return candidates.some((candidate) => {
+    try {
+      return lstatSync(candidate).isSymbolicLink()
+        && /\/(operator-skills|output-styles)\//.test(readlinkSync(candidate));
+    } catch {
+      return false;
+    }
+  });
+}
+
 function install(args) {
   assertPlatform();
-  const profile = parseProfile(args, "guard");
+  const legacyProfile = args[0] && profiles.has(args[0]);
+  let profile = parseProfile(args, "standard");
+  if (args.includes("--extras")) {
+    if (legacyProfile) fail("--extras cannot be combined with a legacy install profile");
+    profile = "full";
+    args = args.filter((arg) => arg !== "--extras");
+  }
   for (const arg of args) {
-    if (arg !== "--baseline" && arg !== "--skills-only") {
+    if (!["--baseline", "--skills-only", "--keep-existing", "--replace-conflicts"].includes(arg)) {
       fail(`unknown install option: ${arg}`);
     }
   }
   const root = stagePayload();
-  process.stdout.write(`Using ${root}\n`);
-  run(join(root, "install.sh"), [profile, ...args]);
+  run(join(root, "install.sh"), [profile, ...args], process.cwd(),
+      { AGENT_CONFIG_COMPACT: "1" });
 }
 
 function doctor(args) {
   assertPlatform();
-  const profile = parseProfile(args, "full");
+  const explicitProfile = args[0] && profiles.has(args[0]);
+  let profile = parseProfile(args, extrasInstalled() ? "full" : "standard");
+  if (args[0] === "--extras") {
+    profile = "full";
+    args.shift();
+  }
+  if (explicitProfile && args[0] === "--extras") {
+    fail("--extras cannot be combined with a legacy doctor profile");
+  }
   if (args.length) {
     fail(`unknown doctor option: ${args[0]}`);
   }
@@ -175,7 +209,8 @@ function doctor(args) {
   if (!root) {
     fail("no installed payload found. Run install first");
   }
-  run(join(root, "install.sh"), [profile, "--check"]);
+  run(join(root, "install.sh"), [profile, "--check"], process.cwd(),
+      { AGENT_CONFIG_COMPACT: "1" });
 }
 
 function init(args) {

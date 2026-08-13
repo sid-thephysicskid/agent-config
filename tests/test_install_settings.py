@@ -51,6 +51,23 @@ class Base(unittest.TestCase):
 
 
 class MergeTest(Base):
+    def test_updates_a_symlink_target_without_detaching_it(self):
+        target = self.path + ".target"
+        with open(target, "w", encoding="utf-8") as fh:
+            json.dump({"model": "opus"}, fh)
+        os.symlink(target, self.path)
+        try:
+            S.merge(self.path)
+            self.assertTrue(os.path.islink(self.path))
+            self.assertEqual(self.read()["model"], "opus")
+            self.assertTrue(S.check(self.path))
+        finally:
+            os.unlink(self.path)
+            os.unlink(target)
+            state = target + S._DENY_STATE_SUFFIX
+            if os.path.exists(state):
+                os.unlink(state)
+
     def test_creates_the_file_when_absent(self):
         S.merge(self.path)
         cfg = self.read()

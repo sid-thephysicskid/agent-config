@@ -21,6 +21,7 @@ Python 3.9, stdlib only, no network.
 import json
 import os
 import re
+import shlex
 import stat
 import sys
 import tempfile
@@ -56,10 +57,16 @@ DENY = (
 )
 
 _GUARD = "if test -f ~/.claude/hooks/%s; then exec python3 ~/.claude/hooks/%s; fi; exit 0"
+_COMMAND_TAG = "agent-config-hook-v1"
+_TAGGED = re.compile(r"^: " + re.escape(_COMMAND_TAG) + r":([\w.-]+); ")
 
 
-def _cmd(script):
-    return _GUARD % (script, script)
+def _cmd(script, hook_dir=None):
+    if hook_dir is None:
+        return _GUARD % (script, script)
+    path = shlex.quote(os.path.join(hook_dir, script))
+    return ": %s:%s; if test -f %s; then exec python3 %s; fi; exit 0" % (
+        _COMMAND_TAG, script, path, path)
 
 
 # event, matcher, script, timeout. This product installs blocking PreToolUse
@@ -80,7 +87,7 @@ _OURS = re.compile(
 
 
 def runs_ours(command):
-    return bool(_OURS.search(str(command)))
+    return bool(_OURS.search(str(command)) or _TAGGED.match(str(command).strip()))
 
 
 # The exact shape install writes, with any script name. `runs_ours` also knows
@@ -95,11 +102,20 @@ _DENY_STATE_SUFFIX = ".agent-config-deny.json"
 
 def our_hook_script(command):
     """The script name if we wrote this hook entry, else None."""
-    found = _OUR_SHAPE.match(str(command).strip())
-    return found.group(1) if found else None
+    text = str(command).strip()
+    found = _OUR_SHAPE.match(text)
+    if found:
+        return found.group(1)
+    tagged = _TAGGED.match(text)
+    return tagged.group(1) if tagged else None
+
+
+def _target(path):
+    return os.path.realpath(path) if os.path.islink(path) else path
 
 
 def _load(path):
+    path = _target(path)
     cfg = {}
     if os.path.exists(path):
         with open(path) as f:
@@ -133,7 +149,7 @@ def _validate(cfg):
 
 
 def _deny_state_path(path):
-    return path + _DENY_STATE_SUFFIX
+    return _target(path) + _DENY_STATE_SUFFIX
 
 
 def _load_managed_denies(path):
@@ -159,6 +175,7 @@ def validate(path):
 def _save(cfg, path):
     # tmp-then-rename: a crash mid-write must not leave a truncated
     # settings.json, which the agent would then start with no hooks at all.
+    path = _target(path)
     mode = stat.S_IMODE(os.stat(path).st_mode) if os.path.exists(path) else 0o600
     directory = os.path.dirname(os.path.abspath(path))
     prefix = ".%s.tmp-" % os.path.basename(path)
@@ -185,7 +202,7 @@ def _entries(cfg, event):
     return cfg.setdefault("hooks", {}).setdefault(event, [])
 
 
-def wire(cfg, event, matcher, script, timeout):
+def wire(cfg, event, matcher, script, timeout, hook_dir=None):
     """Put our hook on this event, replacing any earlier version of ours.
 
     Never duplicates and never touches a hook that is not ours. This was three
@@ -208,7 +225,7 @@ def wire(cfg, event, matcher, script, timeout):
         entry = next((e for e in entries
                       if any(runs_ours(h.get("command", ""))
                              for h in e.get("hooks", []))), None)
-    command = {"type": "command", "command": _cmd(script), "timeout": timeout}
+    command = {"type": "command", "command": _cmd(script, hook_dir), "timeout": timeout}
     if entry is None:
         new = {"hooks": [command]}
         if matcher is not None:
@@ -243,13 +260,13 @@ def prune(cfg):
             del events[event]
 
 
-def merge(path):
+def merge(path, hook_dir=None):
     cfg = _load(path)
     _validate(cfg)
     managed = _load_managed_denies(path)
     prune(cfg)
     for event, matcher, script, timeout in WIRING:
-        wire(cfg, event, matcher, script, timeout)
+        wire(cfg, event, matcher, script, timeout, hook_dir)
     deny = cfg.setdefault("permissions", {}).setdefault("deny", [])
     for rule in DENY:
         if rule not in deny:
@@ -296,6 +313,21 @@ def strip(path):
         pass
 
 
+def check(path, hook_dir=None):
+    cfg = _load(path)
+    _validate(cfg)
+    for event, matcher, script, timeout in WIRING:
+        wanted = _cmd(script, hook_dir)
+        if not any(
+            entry.get("matcher") == matcher
+            and any(hook.get("command") == wanted and hook.get("timeout") == timeout
+                    for hook in entry.get("hooks", []))
+            for entry in cfg.get("hooks", {}).get(event, [])
+        ):
+            return False
+    return True
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__.strip())
@@ -304,8 +336,14 @@ def main(argv):
     if action == "deny":
         print("\n".join(DENY))
         return 0
-    if action in ("merge", "strip", "validate") and len(argv) > 2:
-        {"merge": merge, "strip": strip, "validate": validate}[action](argv[2])
+    if action in ("merge", "check") and len(argv) in (3, 4):
+        hook_dir = argv[3] if len(argv) == 4 else None
+        if action == "merge":
+            merge(argv[2], hook_dir)
+            return 0
+        return 0 if check(argv[2], hook_dir) else 1
+    if action in ("strip", "validate") and len(argv) == 3:
+        {"strip": strip, "validate": validate}[action](argv[2])
         return 0
     print(__doc__.strip())
     return 2
