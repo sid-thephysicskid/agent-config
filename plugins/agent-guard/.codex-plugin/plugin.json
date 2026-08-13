@@ -1,6 +1,6 @@
 {
   "name": "agent-guard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Deterministic macOS/Linux PreToolUse guardrails for common destructive agent mistakes.",
   "author": {
     "name": "Sid Abhinav",

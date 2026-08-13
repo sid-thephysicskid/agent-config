@@ -1,6 +1,6 @@
 {
   "name": "agent-operator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Optional research, handoff, credential setup, and communication tools for coding agents.",
   "author": {
     "name": "Sid Abhinav",

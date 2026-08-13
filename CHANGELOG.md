@@ -4,6 +4,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-12
+
+### Changed
+
+- Reduced the README to purpose, installation, behavior, and verification.
+- Replaced decorative graphics with one system diagram.
+- Kept third-party attribution concise and license-focused.
+
 ## [0.1.0] - 2026-08-12
 
 ### Added

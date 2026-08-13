@@ -11,7 +11,7 @@
       "name": "agent-guard",
       "source": "./plugins/agent-guard",
       "description": "Block common destructive agent mistakes on macOS and Linux before tools run",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {"name": "Sid Abhinav"},
       "category": "development",
       "tags": ["guardrails", "safety", "git"]
@@ -20,7 +20,7 @@
       "name": "agent-workflow",
       "source": "./plugins/agent-workflow",
       "description": "Thirteen focused skills for shipping software",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {"name": "Sid Abhinav"},
       "category": "development",
       "tags": ["skills", "workflow", "engineering"]
@@ -29,7 +29,7 @@
       "name": "agent-operator",
       "source": "./plugins/agent-operator",
       "description": "Optional research, handoff, credential setup, and communication tools",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {"name": "Sid Abhinav"},
       "category": "development",
       "tags": ["research", "credentials", "output-styles"]
