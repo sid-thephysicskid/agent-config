@@ -28,12 +28,12 @@ class NpxCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             self.assertIn("install [guard|workflow|operator|full]",
                           self.run_cli(home, "--help").stdout)
-            self.assertEqual(self.run_cli(home, "--version").stdout.strip(), "0.1.0")
+            self.assertEqual(self.run_cli(home, "--version").stdout.strip(), "0.1.1")
 
     def test_guard_round_trip_uses_stable_versioned_payload(self):
         with tempfile.TemporaryDirectory() as home:
             result = self.run_cli(home, "install", "guard")
-            stable = os.path.join(home, ".local", "share", "agent-config", "0.1.0")
+            stable = os.path.join(home, ".local", "share", "agent-config", "0.1.1")
             self.assertIn(stable, result.stdout)
             self.assertTrue(os.path.isfile(os.path.join(stable, "install.sh")))
             hook = os.path.join(home, ".claude", "hooks", "guard-bash.py")
@@ -56,7 +56,7 @@ class NpxCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             self.run_cli(home, "install", "guard")
             staged = os.path.join(home, ".local", "share", "agent-config",
-                                  "0.1.0", "install.sh")
+                                  "0.1.1", "install.sh")
             with open(staged, "a", encoding="utf-8") as fh:
                 fh.write("\n# tampered\n")
             result = self.run_cli(home, "install", "guard", check=False)
@@ -106,7 +106,7 @@ class NpxCliTest(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertEqual(executed.stdout.strip(), "0.1.0")
+            self.assertEqual(executed.stdout.strip(), "0.1.1")
 
     def test_packed_tarball_installs_and_removes_guard(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -128,7 +128,7 @@ class NpxCliTest(unittest.TestCase):
             subprocess.run(prefix + ["install", "guard"], cwd=directory, env=env,
                            text=True, capture_output=True, check=True)
             hook = os.path.join(home, ".claude", "hooks", "guard-bash.py")
-            stable = os.path.join(home, ".local", "share", "agent-config", "0.1.0")
+            stable = os.path.join(home, ".local", "share", "agent-config", "0.1.1")
             self.assertTrue(os.path.islink(hook))
             self.assertTrue(os.readlink(hook).startswith(stable + os.sep))
             subprocess.run(prefix + ["doctor", "guard"], cwd=directory, env=env,

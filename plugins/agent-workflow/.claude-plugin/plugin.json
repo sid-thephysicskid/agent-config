@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "agent-workflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Thirteen delivery skills with a shared project-instruction initializer.",
   "author": {
     "name": "Sid Abhinav",
