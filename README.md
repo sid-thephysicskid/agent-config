@@ -13,12 +13,12 @@ Guardrails and focused delivery workflows for Claude Code and Codex.
 ### From npm
 
 ```bash
-npx agent-config@latest install guard
-npx agent-config@latest install workflow
-npx agent-config@latest install operator
-npx agent-config@latest install full
-npx agent-config@latest doctor guard
-npx agent-config@latest uninstall guard
+npx @sid-thephysicskid/agent-config@latest install guard
+npx @sid-thephysicskid/agent-config@latest install workflow
+npx @sid-thephysicskid/agent-config@latest install operator
+npx @sid-thephysicskid/agent-config@latest install full
+npx @sid-thephysicskid/agent-config@latest doctor guard
+npx @sid-thephysicskid/agent-config@latest uninstall guard
 ```
 
 The default is `guard`. The npm installer copies versioned files to
@@ -143,7 +143,8 @@ agent-init
 ```
 
 If `~/.local/bin` is not on `PATH`, use `~/.local/bin/agent-init`. You can also
-run `npx agent-config@latest init` without a global workflow install.
+run `npx @sid-thephysicskid/agent-config@latest init` without a global workflow
+install.
 
 That creates a real project `AGENTS.md` and a relative `CLAUDE.md -> AGENTS.md` symlink. Existing content is preserved. A conflicting `CLAUDE.md` is reported and left untouched.
 
