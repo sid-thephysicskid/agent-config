@@ -34,7 +34,7 @@ class ReleaseMetadataTest(unittest.TestCase):
         with open(os.path.join(ROOT, "package.json")) as fh:
             package = json.load(fh)
         self.assertEqual(package["version"], version)
-        self.assertEqual(package["name"], "agent-config")
+        self.assertEqual(package["name"], "@sid-thephysicskid/agent-config")
         self.assertEqual(package["publishConfig"]["access"], "public")
         for name in ("agent-guard", "agent-workflow", "agent-operator"):
             for host in (".codex-plugin", ".claude-plugin"):
