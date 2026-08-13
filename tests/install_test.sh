@@ -1028,7 +1028,7 @@ for f in LICENSE THIRD-PARTY-NOTICES.md; do
   chk "$f present" "$([ -s "$S/repo/$f" ] && echo yes || echo no)" "yes"
 done
 chk "LICENSE points to third-party notices" "$(grep -c 'THIRD-PARTY-NOTICES.md' "$S/repo/LICENSE")" "1"
-chk "third-party notice names navigate" "$([ "$(grep -c 'navigate' "$S/repo/THIRD-PARTY-NOTICES.md")" -ge 1 ] && echo yes || echo no)" "yes"
+chk "third-party notice names adapted architect skill" "$([ "$(grep -c 'architect' "$S/repo/THIRD-PARTY-NOTICES.md")" -ge 1 ] && echo yes || echo no)" "yes"
 
 echo "== 68. every malformed hook event aborts before mutation =="
 H="$S/h68"; mkdir -p "$H/.claude"
