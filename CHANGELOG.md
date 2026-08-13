@@ -4,6 +4,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-12
+
 ### Added
 
 - Deterministic pre-tool guardrails for Claude Code and Codex, with explicit

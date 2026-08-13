@@ -10,9 +10,24 @@ Guardrails and focused delivery workflows for Claude Code and Codex.
 
 ## Install
 
+### From npm
+
+```bash
+npx agent-config@latest install guard
+npx agent-config@latest install workflow
+npx agent-config@latest install operator
+npx agent-config@latest install full
+npx agent-config@latest doctor guard
+npx agent-config@latest uninstall guard
+```
+
+The default is `guard`. The npm installer copies versioned files to
+`~/.local/share/agent-config/`, so the installation does not depend on npm's
+temporary cache.
+
 ### From a checkout
 
-The npm package is not published yet. Install from an audited checkout:
+To inspect the source before installing:
 
 ```bash
 git clone https://github.com/sid-thephysicskid/agent-config.git
@@ -30,23 +45,6 @@ Check or remove a profile:
 ./install.sh guard --check
 ./uninstall.sh guard
 ```
-
-### From npm
-
-After the first package release, the equivalent commands will be:
-
-```bash
-npx agent-config@latest install guard
-npx agent-config@latest install workflow
-npx agent-config@latest install operator
-npx agent-config@latest install full
-npx agent-config@latest doctor guard
-npx agent-config@latest uninstall guard
-```
-
-The default is `guard`. The npm installer copies versioned files to
-`~/.local/share/agent-config/`, so the installation does not depend on npm's
-temporary cache.
 
 macOS and Linux are supported. Native Windows is not supported, and WSL is not yet verified. Node 18 or newer is required for the installer. The guard also requires Python 3.8 or newer.
 
@@ -144,9 +142,8 @@ After installing `workflow` or `full`, run this inside a project:
 agent-init
 ```
 
-If `~/.local/bin` is not on `PATH`, use `~/.local/bin/agent-init`. After the npm
-release, `npx agent-config@latest init` will provide the same command without a
-global workflow install.
+If `~/.local/bin` is not on `PATH`, use `~/.local/bin/agent-init`. You can also
+run `npx agent-config@latest init` without a global workflow install.
 
 That creates a real project `AGENTS.md` and a relative `CLAUDE.md -> AGENTS.md` symlink. Existing content is preserved. A conflicting `CLAUDE.md` is reported and left untouched.
 
