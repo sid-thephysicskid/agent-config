@@ -17,33 +17,11 @@ HOME="$H" bash "$S/repo/install.sh" >/dev/null 2>&1; chk "exit 0" "$?" "0"
 chk "workflow is not installed by default" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
 chk "settings has hook" "$(grep -c guard-bash "$H/.claude/settings.json")" "1"
 
-echo "== 1b. a normal install still gates on both guard suites =="
-mv "$S/repo/hooks/tests.py" "$S/repo/hooks/tests.py.real"
-printf '#!/usr/bin/env python3\nraise SystemExit(1)\n' > "$S/repo/hooks/tests.py"
-H="$S/h1b"; mkdir -p "$H"
-HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
-chk "a broken rule suite aborts" "$?" "1"
-chk "rule failure leaves no install" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
-mv "$S/repo/hooks/tests.py.real" "$S/repo/hooks/tests.py"
+echo "== 1b. release CI gates both guard suites once =="
+chk "rule suite is a release gate" "$(grep -c 'hooks/tests.py --no-perf' "$S/repo/scripts/ci-local")" "1"
+chk "floor suite is a release gate" "$(grep -c 'hooks/floor.py' "$S/repo/scripts/ci-local")" "1"
 
-mv "$S/repo/hooks/floor.py" "$S/repo/hooks/floor.py.real"
-printf '#!/usr/bin/env python3\nraise SystemExit(1)\n' > "$S/repo/hooks/floor.py"
-H="$S/h1c"; mkdir -p "$H"
-HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
-chk "a broken floor suite aborts" "$?" "1"
-chk "floor failure leaves no install" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
-mv "$S/repo/hooks/floor.py.real" "$S/repo/hooks/floor.py"
-
-# Guard behavior is static across fake HOMEs. It passed in test 1, and tests
-# 1b/1c proved the real installer stops when either suite fails. Keep the full
-# suites for their later direct check, then make only this disposable clone's
-# repeated installer calls cheap. Production install.sh has no bypass.
-cp "$S/repo/hooks/tests.py" "$S/repo/hooks/tests.py.installer-full"
-cp "$S/repo/hooks/floor.py" "$S/repo/hooks/floor.py.installer-full"
-printf '#!/usr/bin/env python3\nprint("PASS (already proved by installer matrix)")\n' > "$S/repo/hooks/tests.py"
-printf '#!/usr/bin/env python3\nprint("PASS (already proved by installer matrix)")\n' > "$S/repo/hooks/floor.py"
-
-echo "== 2. an occupied path is refused, and nothing of theirs is touched =="
+echo "== 2. existing instructions and unrelated skills are preserved =="
 H="$S/h2"; mkdir -p "$H/.claude/skills/my-own-skill"
 echo "mine" > "$H/.claude/skills/my-own-skill/SKILL.md"
 echo "my personal instructions" > "$H/.claude/CLAUDE.md"
@@ -51,17 +29,17 @@ cat > "$H/.claude/settings.json" <<'EOF'
 {"model":"opus","permissions":{"allow":["Bash(ls:*)"]},"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"my-own-hook.sh"}]}]}}
 EOF
 out="$(HOME="$H" bash "$S/repo/install.sh" full --baseline 2>&1)"; code=$?
-chk "refuses rather than taking the path" "$code" "1"
+chk "install succeeds" "$code" "0"
 chk "names the occupied path" "$(grep -c 'CLAUDE.md' <<<"$out")" "1"
-chk "offers the mv that clears it" "$(grep -c 'mv .*CLAUDE.md .*CLAUDE.md.mine' <<<"$out")" "1"
+chk "adds one routing block" "$(grep -c 'agent-config:start' "$H/.claude/CLAUDE.md")" "1"
 # The point of the whole change: an install attempt must be a no-op.
-chk "their CLAUDE.md is byte-identical" "$(cat "$H/.claude/CLAUDE.md")" "my personal instructions"
+chk "their CLAUDE.md remains first" "$(head -1 "$H/.claude/CLAUDE.md")" "my personal instructions"
 chk "not replaced by our symlink" "$([ -L "$H/.claude/CLAUDE.md" ] && echo yes || echo no)" "no"
 chk "no backup litter left behind" \
   "$(find "$H/.claude" -maxdepth 1 -mindepth 1 \
      \( -name '*.bak-*' -o -name '*.baklink-*' \) -print | wc -l | tr -d ' ')" "0"
-chk "settings.json untouched" "$(grep -c guard- "$H/.claude/settings.json")" "0"
-chk "nothing installed at all" "$([ -L "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
+chk "settings.json merged" "$(grep -c guard-bash "$H/.claude/settings.json")" "1"
+chk "workflow installed" "$([ -L "$H/.claude/skills/ship" ] && echo yes || echo no)" "yes"
 
 # Their own skill is NOT a conflict: we ship no skill by that name, so it is
 # left exactly where it is and keeps working.
@@ -71,7 +49,7 @@ chk "a skill of theirs we do not ship is not a conflict" \
 echo "== 2b. once they move it aside, the install goes through =="
 mv "$H/.claude/CLAUDE.md" "$H/.claude/CLAUDE.md.mine"
 HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1; chk "exit 0" "$?" "0"
-chk "their moved file is still theirs" "$(cat "$H/.claude/CLAUDE.md.mine")" "my personal instructions"
+chk "their moved file is still theirs" "$(head -1 "$H/.claude/CLAUDE.md.mine")" "my personal instructions"
 chk "user model preserved" "$(python3 -c "import json;print(json.load(open('$H/.claude/settings.json'))['model'])")" "opus"
 chk "user permissions preserved" "$(python3 -c "import json;print(json.load(open('$H/.claude/settings.json'))['permissions']['allow'][0])")" "Bash(ls:*)"
 chk "user's own hook preserved" "$(grep -c my-own-hook "$H/.claude/settings.json")" "1"
@@ -174,23 +152,21 @@ chk "user's own hook script still present" "$([ -f "$H/.claude/hooks/my-guard.py
 chk "it still runs" "$(python3 "$H/.claude/hooks/my-guard.py" </dev/null >/dev/null 2>&1; echo $?)" "0"
 chk "our hooks linked alongside" "$([ -L "$H/.claude/hooks/guard-bash.py" ] && echo yes || echo no)" "yes"
 
-echo "== 11. an occupied CLAUDE.md is refused; uninstall is still a round trip =="
+echo "== 11. an occupied CLAUDE.md is merged and uninstall is a round trip =="
 H="$S/h11"; mkdir -p "$H/.claude"
 echo "my personal instructions" > "$H/.claude/CLAUDE.md"
-HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1; chk "refused" "$?" "1"
-chk "their CLAUDE.md untouched" "$(cat "$H/.claude/CLAUDE.md")" "my personal instructions"
+HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "installed" "$?" "0"
+chk "their CLAUDE.md preserved" "$(head -1 "$H/.claude/CLAUDE.md")" "my personal instructions"
 chk "not a symlink" "$([ -L "$H/.claude/CLAUDE.md" ] && echo yes || echo no)" "no"
-mv "$H/.claude/CLAUDE.md" "$H/.claude/CLAUDE.md.mine"
-HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1; chk "installs once moved" "$?" "0"
 HOME="$H" bash "$S/repo/uninstall.sh" >/dev/null 2>&1
-chk "our link is gone" "$([ -L "$H/.claude/CLAUDE.md" ] && echo yes || echo no)" "no"
-chk "their file was never involved" "$(cat "$H/.claude/CLAUDE.md.mine")" "my personal instructions"
+chk "routing block is gone" "$(grep -c 'agent-config:start' "$H/.claude/CLAUDE.md")" "0"
+chk "their file is restored" "$(cat "$H/.claude/CLAUDE.md")" "my personal instructions"
 
-echo "== 12. a colliding Codex skill name is refused, not absorbed =="
+echo "== 12. a colliding Codex skill name is kept =="
 H="$S/h12"; mkdir -p "$H/.codex/skills/review"
 echo "their review" > "$H/.codex/skills/review/SKILL.md"
-out="$(HOME="$H" bash "$S/repo/install.sh" full 2>&1)"; chk "refused" "$?" "1"
-chk "names their skill path" "$(grep -c '.codex/skills/review' <<<"$out")" "1"
+out="$(HOME="$H" AGENT_CONFIG_NONINTERACTIVE=1 bash "$S/repo/install.sh" full 2>&1)"; chk "installed" "$?" "0"
+chk "reports one kept skill" "$(grep -c 'kept 1 existing skill' <<<"$out")" "1"
 chk "their review is untouched" "$(cat "$H/.codex/skills/review/SKILL.md")" "their review"
 chk "nothing of ours nested inside it" "$(ls "$H/.codex/skills/review" | tr -d ' \n')" "SKILL.md"
 
@@ -217,7 +193,7 @@ chk "exits nonzero" "$([ $? -ne 0 ] && echo yes || echo no)" "yes"
 chk "nothing installed" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
 chk "settings untouched" "$(cat "$H/.claude/settings.json")" '["not", "an", "object"]'
 
-echo "== 16. a dotfile-managed HOME is refused, never unloaded =="
+echo "== 16. dotfile-managed skill and hook directories are supported =="
 # stow/chezmoi point whole directories elsewhere. The old contract replaced
 # them and promised to put them back; this one does not take them at all.
 H="$S/h16"; mkdir -p "$H/.claude" "$H/dots/skills/mine" "$H/dots/hooks"
@@ -225,9 +201,9 @@ echo "my skill" > "$H/dots/skills/mine/SKILL.md"
 echo "my hook"  > "$H/dots/hooks/my-guard.py"
 ln -s "$H/dots/skills" "$H/.claude/skills"
 ln -s "$H/dots/hooks"  "$H/.claude/hooks"
-out="$(HOME="$H" bash "$S/repo/install.sh" full 2>&1)"; chk "refused" "$?" "1"
+out="$(HOME="$H" bash "$S/repo/install.sh" full 2>&1)"; chk "installed" "$?" "0"
 chk "both managed directories named" \
-  "$(grep -cE 'mv .*\.claude/(skills|hooks) ' <<<"$out")" "2"
+  "$(grep -cE 'mv .*\.claude/(skills|hooks) ' <<<"$out")" "0"
 chk "skills link still theirs" "$(readlink "$H/.claude/skills")" "$H/dots/skills"
 chk "hooks link still theirs" "$(readlink "$H/.claude/hooks")" "$H/dots/hooks"
 chk "their skill still loads" "$(cat "$H/.claude/skills/mine/SKILL.md")" "my skill"
@@ -235,11 +211,11 @@ chk "no baklink bookkeeping was invented" \
   "$(find "$H/.claude" -maxdepth 1 -mindepth 1 -name '*baklink*' -print \
      | wc -l | tr -d ' ')" "0"
 
-echo "== 17. a per-skill symlink of theirs is refused =="
+echo "== 17. a per-skill symlink of theirs is kept =="
 H="$S/h17"; mkdir -p "$H/.claude/skills" "$H/dots/review"
 echo "their review" > "$H/dots/review/SKILL.md"
 ln -s "$H/dots/review" "$H/.claude/skills/review"
-HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "refused" "$?" "1"
+HOME="$H" AGENT_CONFIG_NONINTERACTIVE=1 bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "installed" "$?" "0"
 chk "their link is intact" "$(readlink "$H/.claude/skills/review")" "$H/dots/review"
 chk "their skill still loads" "$(cat "$H/.claude/skills/review/SKILL.md")" "their review"
 
@@ -275,15 +251,15 @@ H="$S/h18c"; mkdir -p "$H/.codex" "$H/dots"
 echo '{"hooks":{}}' > "$H/dots/hooks.json"
 ln -s "$H/dots/hooks.json" "$H/.codex/hooks.json"
 HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
-chk "dotfile-managed hooks are refused" "$?" "1"
+chk "dotfile-managed hooks are supported" "$?" "0"
 chk "their hooks symlink survives" "$(readlink "$H/.codex/hooks.json")" "$H/dots/hooks.json"
 HOME="$H" bash "$S/repo/uninstall.sh" >/dev/null 2>&1
 chk "uninstall leaves their hooks symlink" "$(readlink "$H/.codex/hooks.json")" "$H/dots/hooks.json"
-chk "uninstall leaves its target" "$(cat "$H/dots/hooks.json")" '{"hooks":{}}'
+chk "uninstall leaves its target" "$(cat "$H/dots/hooks.json")" '{}'
 H="$S/h18d"; mkdir -p "$H/.codex" "$H/dots"
 ln -s "$H/dots/missing.json" "$H/.codex/hooks.json"
 HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
-chk "a dangling hooks symlink is refused" "$?" "1"
+chk "a dangling hooks symlink is repaired" "$?" "0"
 chk "the dangling symlink survives" "$(readlink "$H/.codex/hooks.json")" "$H/dots/missing.json"
 
 echo "== 19. install x3 then uninstall leaves nothing of ours behind =="
@@ -295,15 +271,16 @@ LEFT=$(find "$H" -type l 2>/dev/null | while read -r l; do
 chk "no symlinks into the repo remain" "$LEFT" "0"
 chk "guard hooks stripped" "$(grep -c guard-bash "$H/.claude/settings.json" 2>/dev/null | head -1)" "0"
 
-echo "== 20. a stow-managed settings.json is refused, not dereferenced =="
+echo "== 20. a stow-managed settings.json is updated without detaching =="
 # The most dangerous of the lot under the old contract: replacing the link with
 # a real file left the settings looking fine while silently detaching them from
 # the user's dotfiles repo, where they would never notice.
 H="$S/h20"; mkdir -p "$H/.claude" "$H/dots"
 echo '{"model":"opus"}' > "$H/dots/settings.json"
 ln -s "$H/dots/settings.json" "$H/.claude/settings.json"
-HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "refused" "$?" "1"
-chk "dotfile source untouched" "$(cat "$H/dots/settings.json")" '{"model":"opus"}'
+HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "installed" "$?" "0"
+chk "dotfile source keeps its model" "$(python3 -c "import json;print(json.load(open('$H/dots/settings.json'))['model'])")" "opus"
+chk "dotfile source receives the guard" "$(grep -c guard-bash "$H/dots/settings.json")" "1"
 chk "still their symlink" "$([ -L "$H/.claude/settings.json" ] && echo yes || echo no)" "yes"
 chk "still points at their tree" "$(readlink "$H/.claude/settings.json")" "$H/dots/settings.json"
 
@@ -383,8 +360,8 @@ echo "== 27. the optional baseline links only supported host paths =="
 H="$S/h27"; mkdir -p "$H/.codex"
 HOME="$H" bash "$S/repo/install.sh" workflow --baseline >/dev/null 2>&1
 chk "home AGENTS.md is not duplicated" "$([ -e "$H/AGENTS.md" ] && echo yes || echo no)" "no"
-chk "Codex AGENTS.md is linked" "$(readlink "$H/.codex/AGENTS.md")" "$S/repo/AGENTS.md"
-chk "Claude CLAUDE.md is linked" "$(readlink "$H/.claude/CLAUDE.md")" "$S/repo/AGENTS.md"
+chk "Codex AGENTS.md is linked" "$(readlink "$H/.codex/AGENTS.md")" "$S/repo/templates/AGENTS.global.md"
+chk "Claude CLAUDE.md is linked" "$(readlink "$H/.claude/CLAUDE.md")" "$S/repo/templates/AGENTS.global.md"
 HOME="$H" bash "$S/repo/uninstall.sh" workflow >/dev/null 2>&1
 chk "all three gone after uninstall" \
   "$([ -e "$H/AGENTS.md" ] || [ -e "$H/.codex/AGENTS.md" ] || [ -e "$H/.claude/CLAUDE.md" ] && echo some || echo none)" "none"
@@ -461,15 +438,17 @@ HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1
 chk "exits nonzero" "$([ $? -ne 0 ] && echo yes || echo no)" "yes"
 chk "nothing installed" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
 
-echo "== 35. CLAUDE_CONFIG_DIR and CODEX_HOME are refused, not silently ignored =="
+echo "== 35. CLAUDE_CONFIG_DIR and CODEX_HOME are respected =="
 # Claude Code reads CLAUDE_CONFIG_DIR. Installing into ~/.claude anyway reports
 # a clean "Done" and wires nothing the agent will ever read.
 H="$S/h35"; mkdir -p "$H"
 CLAUDE_CONFIG_DIR="$H/cfg" HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
-chk "CLAUDE_CONFIG_DIR aborts" "$([ $? -ne 0 ] && echo yes || echo no)" "yes"
+chk "CLAUDE_CONFIG_DIR installs" "$([ $? -eq 0 ] && echo yes || echo no)" "yes"
+chk "Claude custom home receives skills" "$([ -L "$H/cfg/skills/ship" ] && echo yes || echo no)" "yes"
 chk "nothing installed" "$([ -e "$H/.claude/skills" ] && echo yes || echo no)" "no"
 CODEX_HOME="$H/cdx" HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
-chk "CODEX_HOME aborts" "$([ $? -ne 0 ] && echo yes || echo no)" "yes"
+chk "CODEX_HOME installs" "$([ $? -eq 0 ] && echo yes || echo no)" "yes"
+chk "Codex custom home receives skills" "$([ -L "$H/cdx/skills/ship" ] && echo yes || echo no)" "yes"
 
 echo "== 36. install.sh works when invoked through a symlink =="
 H="$S/h36"; mkdir -p "$H/bin"
@@ -495,13 +474,13 @@ chk "no symlinks into the repo remain" \
 chk "their CLAUDE.md restored" "$(cat "$H/.claude/CLAUDE.md" 2>/dev/null)" "my personal instructions"
 chk "codex hooks.json removed" "$([ -e "$H/.codex/hooks.json" ] && echo yes || echo no)" "no"
 
-echo "== 38. a dotfile-managed ~/.codex/skills is refused, not written into =="
+echo "== 38. a dotfile-managed ~/.codex/skills is supported =="
 H="$S/h38"; mkdir -p "$H/.codex" "$H/dots/codexskills/theirs"
 echo "theirs" > "$H/dots/codexskills/theirs/SKILL.md"
 ln -s "$H/dots/codexskills" "$H/.codex/skills"
-HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "refused" "$?" "1"
-chk "their stow tree is untouched" "$(ls "$H/dots/codexskills" | tr -d ' \n')" "theirs"
-chk "no links dropped into it" "$(find "$H/dots/codexskills" -type l | wc -l | tr -d ' ')" "0"
+HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "installed" "$?" "0"
+chk "their skill survives" "$(cat "$H/dots/codexskills/theirs/SKILL.md")" "theirs"
+chk "workflow links are added beside it" "$(find "$H/dots/codexskills" -type l | wc -l | tr -d ' ')" "16"
 chk "their symlink is intact" "$(readlink "$H/.codex/skills")" "$H/dots/codexskills"
 
 echo "== 39. a hooks.json or skills path of the wrong type aborts before mutating =="
@@ -552,7 +531,7 @@ H="$S/h42"; mkdir -p "$H/.codex"
 HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1
 out=$(HOME="$H" bash "$S/repo/install.sh" full --check 2>&1)
 chk "says where trust is reviewed" "$(grep -c 'inspect it with /hooks' <<<"$out")" "1"
-chk "but does not fail the check" "$(grep -c 'all good' <<<"$out")" "1"
+chk "but does not fail the check" "$(grep -c 'Guard active' <<<"$out")" "1"
 printf '[hooks]\npre_tool_use = "hooks.json:pre_tool_use"\n' > "$H/.codex/config.toml"
 out=$(HOME="$H" bash "$S/repo/install.sh" full --check 2>&1)
 chk "does not infer trust from private config" "$(grep -c 'inspect it with /hooks' <<<"$out")" "1"
@@ -587,21 +566,21 @@ EOF
 out=$(HOME="$H" bash "$S/repo/install.sh" full --check 2>&1)
 chk "not accepted as wired" "$(grep -c 'guard hooks missing or not wired' <<<"$out")" "1"
 
-echo "== 48. a dangling skill link does not abort the install =="
+echo "== 48. a dangling user-owned skill link is preserved =="
 # Under `set -euo pipefail` a `grep -ix` that matched nothing killed the script
 # with NO message. It fires on exactly what a moved or deleted clone leaves.
-# A dangling link points at nothing, so replacing it loses nothing: refusing
-# would leave a machine that re-running install could never repair.
+# A dangling link may belong to a dotfile manager or temporarily unavailable
+# checkout. Noninteractive install keeps it and continues with other skills.
 H="$S/h48"; mkdir -p "$H/.claude/skills" "$H/.codex"
 ln -s "$S/gone/skills/ship" "$H/.claude/skills/ship"
 HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1; chk "exit 0" "$?" "0"
-chk "ship relinked to this repo" "$(readlink "$H/.claude/skills/ship")" "$S/repo/skills/ship/"
+chk "their dangling link is kept" "$(readlink "$H/.claude/skills/ship")" "$S/gone/skills/ship"
 chk "later skills still linked" "$([ -L "$H/.claude/skills/unstick" ] && echo yes || echo no)" "yes"
 chk "settings.json still written" "$(grep -c guard-bash "$H/.claude/settings.json")" "1"
 chk "CLAUDE.md still linked" "$([ -L "$H/.claude/CLAUDE.md" ] && echo yes || echo no)" "yes"
-# ...but a real FILE of theirs where a skill link belongs is refused.
+# A real file of theirs where a skill link belongs is kept.
 H="$S/h48b"; mkdir -p "$H/.claude/skills"; echo x > "$H/.claude/skills/review"
-HOME="$H" bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "a plain file is refused" "$?" "1"
+HOME="$H" AGENT_CONFIG_NONINTERACTIVE=1 bash "$S/repo/install.sh" full >/dev/null 2>&1; chk "a plain file is kept" "$?" "0"
 chk "and it still says x" "$(cat "$H/.claude/skills/review")" "x"
 
 echo "== 49. relocating the repo does not manufacture dangling symlinks =="
@@ -672,26 +651,22 @@ echo "== 52. a timing budget must not abort the install =="
 # The suite's wall-clock assertions gated the install, so a loaded machine
 # aborted with "guard regression suite fails in this checkout" and the
 # suggested command then printed PASS. --no-perf is what install.sh runs.
-out=$(python3 "$S/repo/hooks/tests.py.installer-full" --no-perf 2>&1)
+out=$(python3 "$S/repo/hooks/tests.py" --no-perf 2>&1)
 chk "correctness-only mode passes" "$(grep -c '^PASS' <<<"$out")" "1"
 chk "and reports no timing lines" "$(grep -c 'budget' <<<"$out")" "0"
-chk "install.sh uses it" "$(grep -c 'tests.py" --no-perf' "$S/repo/install.sh")" "1"
+chk "installer does not rerun the release suite" "$(grep -c 'tests.py" --no-perf' "$S/repo/install.sh")" "0"
 
 echo "== 53. a HOME with a space round-trips =="
 # Seven unquoted "$var" sites survived mutation because no fixture ever used
 # one. Exercises the refusal path too, which prints paths of its own.
 H="$S/home with space"; mkdir -p "$H/.codex" "$H/.claude"
 echo "my instructions" > "$H/.claude/CLAUDE.md"
-out="$(HOME="$H" bash "$S/repo/install.sh" full --baseline 2>&1)"; chk "refused" "$?" "1"
-chk "the spaced path is shell-escaped" "$(grep -c 'home\\ with\\ space/.claude/CLAUDE.md' <<<"$out")" "1"
-chk "their file untouched" "$(cat "$H/.claude/CLAUDE.md")" "my instructions"
-move_command="$(sed -n 's/^    \(mv .*CLAUDE\.md\.mine\)$/\1/p' <<<"$out")"
-eval "$move_command"
-chk "the printed remediation command works" "$([ -f "$H/.claude/CLAUDE.md.mine" ] && echo yes || echo no)" "yes"
-HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1; chk "install exit 0" "$?" "0"
+out="$(HOME="$H" bash "$S/repo/install.sh" full 2>&1)"; chk "install exit 0" "$?" "0"
+chk "their file stays first" "$(head -1 "$H/.claude/CLAUDE.md")" "my instructions"
+chk "routing is added" "$(grep -c 'agent-config:start' "$H/.claude/CLAUDE.md")" "1"
 chk "skills linked" "$([ -L "$H/.claude/skills/ship" ] && echo yes || echo no)" "yes"
 HOME="$H" bash "$S/repo/uninstall.sh" >/dev/null 2>&1; chk "uninstall exit 0" "$?" "0"
-chk "their file still theirs" "$(cat "$H/.claude/CLAUDE.md.mine" 2>/dev/null)" "my instructions"
+chk "their file still theirs" "$(cat "$H/.claude/CLAUDE.md" 2>/dev/null)" "my instructions"
 
 echo "== 54. a user path that merely shares a prefix with the clone is NOT ours =="
 # `$t == "$REPO"*` had no path boundary, so a stow file at `.../repo-dots/x`
@@ -704,8 +679,8 @@ echo "their skill" > "$S/pfx/repo-dots/skills/mine/SKILL.md"
 H="$S/h54"; mkdir -p "$H/.claude/skills" "$H/.codex"
 ln -s "$S/pfx/repo-dots/CLAUDE.md" "$H/.claude/CLAUDE.md"
 ln -s "$S/pfx/repo-dots/skills/mine" "$H/.claude/skills/mine"
-HOME="$H" bash "$S/pfx/repo/install.sh" full --baseline >/dev/null 2>&1; chk "refused" "$?" "1"
-chk "their CLAUDE.md survives" "$(cat "$H/.claude/CLAUDE.md" 2>/dev/null)" "their instructions"
+HOME="$H" bash "$S/pfx/repo/install.sh" full >/dev/null 2>&1; chk "installed" "$?" "0"
+chk "their CLAUDE.md survives" "$(head -1 "$H/.claude/CLAUDE.md" 2>/dev/null)" "their instructions"
 chk "their skill link survives" "$(readlink "$H/.claude/skills/mine")" "$S/pfx/repo-dots/skills/mine"
 chk "their skill still loads" "$(cat "$H/.claude/skills/mine/SKILL.md" 2>/dev/null)" "their skill"
 
@@ -866,8 +841,8 @@ HOME="$H" bash "$S/repo/install.sh" workflow >/dev/null 2>&1
 chk "workflow installs skills" "$([ -L "$H/.claude/skills/ship" ] && echo yes || echo no)" "yes"
 chk "workflow excludes operator skills" "$([ -e "$H/.claude/skills/wizard" ] && echo yes || echo no)" "no"
 chk "workflow excludes output styles" "$([ -e "$H/.claude/output-styles/terse.md" ] && echo yes || echo no)" "no"
-chk "workflow links Claude orchestration by default" "$(readlink "$H/.claude/CLAUDE.md")" "$S/repo/AGENTS.md"
-chk "workflow links Codex orchestration by default" "$(readlink "$H/.codex/AGENTS.md")" "$S/repo/AGENTS.md"
+chk "workflow links Claude orchestration by default" "$(readlink "$H/.claude/CLAUDE.md")" "$S/repo/templates/AGENTS.global.md"
+chk "workflow links Codex orchestration by default" "$(readlink "$H/.codex/AGENTS.md")" "$S/repo/templates/AGENTS.global.md"
 chk "both hosts share one instruction source" \
   "$([ "$(readlink "$H/.claude/CLAUDE.md")" = "$(readlink "$H/.codex/AGENTS.md")" ] && echo yes || echo no)" "yes"
 chk "workflow installs project initializer" "$(readlink "$H/.local/bin/agent-init")" "$S/repo/scripts/agent-init"
@@ -905,9 +880,9 @@ H="$S/h66existing"; mkdir -p "$H/.claude" "$H/.codex"
 printf '%s\n' "mine" > "$H/.claude/CLAUDE.md"
 out="$(HOME="$H" bash "$S/repo/install.sh" workflow 2>&1)"; rc=$?
 chk "automatic baseline preserves existing instructions" "$rc" "0"
-chk "existing Claude instructions survive" "$(cat "$H/.claude/CLAUDE.md")" "mine"
-chk "automatic fallback does not install only one host baseline" "$([ -e "$H/.codex/AGENTS.md" ] && echo yes || echo no)" "no"
-chk "automatic fallback explains skills-only mode" "$(grep -c 'installing skills only' <<<"$out")" "1"
+chk "existing Claude instructions survive" "$(head -1 "$H/.claude/CLAUDE.md")" "mine"
+chk "existing Claude instructions receive routing" "$(grep -c 'agent-config:start' "$H/.claude/CLAUDE.md")" "1"
+chk "Codex receives shared routing" "$([ -e "$H/.codex/AGENTS.md" ] && echo yes || echo no)" "yes"
 chk "automatic fallback still installs initializer" "$([ -L "$H/.local/bin/agent-init" ] && echo yes || echo no)" "yes"
 
 H="$S/h66split"; mkdir -p "$H/.claude" "$H/.codex"
@@ -917,8 +892,8 @@ HOME="$H" bash "$S/repo/install.sh" workflow --check >/dev/null 2>&1; rc=$?
 chk "check rejects split host instructions" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
 HOME="$H" bash "$S/repo/install.sh" workflow >/dev/null 2>&1; rc=$?
 chk "automatic fallback repairs split state" "$rc" "0"
-chk "automatic fallback removes our orphaned baseline" "$([ -e "$H/.codex/AGENTS.md" ] && echo yes || echo no)" "no"
-chk "split repair preserves their instructions" "$(cat "$H/.claude/CLAUDE.md")" "mine"
+chk "automatic routing keeps Codex active" "$([ -e "$H/.codex/AGENTS.md" ] && echo yes || echo no)" "yes"
+chk "split repair preserves their instructions" "$(head -1 "$H/.claude/CLAUDE.md")" "mine"
 
 H="$S/h66flags"; mkdir -p "$H"
 HOME="$H" bash "$S/repo/install.sh" workflow --baseline --skills-only >/dev/null 2>&1; rc=$?
@@ -928,9 +903,9 @@ chk "invalid baseline flags mutate nothing" "$(find "$H" -type l | wc -l | tr -d
 H="$S/h66bindot"; mkdir -p "$H/.local" "$H/dotfiles/bin"
 ln -s "$H/dotfiles/bin" "$H/.local/bin"
 HOME="$H" bash "$S/repo/install.sh" workflow --skills-only >/dev/null 2>&1; rc=$?
-chk "dotfile-managed local bin is refused" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
-chk "dotfile-managed local bin remains empty" "$(find "$H/dotfiles/bin" -mindepth 1 | wc -l | tr -d ' ')" "0"
-chk "local bin conflict leaves no workflow links" "$(find "$H" -type l ! -path "$H/.local/bin" | wc -l | tr -d ' ')" "0"
+chk "dotfile-managed local bin is supported" "$([ $rc -eq 0 ] && echo yes || echo no)" "yes"
+chk "dotfile-managed local bin receives agent-init" "$([ -L "$H/dotfiles/bin/agent-init" ] && echo yes || echo no)" "yes"
+chk "workflow links are installed" "$([ -L "$H/.claude/skills/ship" ] && echo yes || echo no)" "yes"
 
 H="$S/h66codexfile"; mkdir -p "$H"
 printf '%s\n' "mine" > "$H/.codex"
@@ -951,9 +926,9 @@ chk "local parent file records no origin" "$([ -e "$H/.claude/.agent-config-orig
 H="$S/h66localsymlink"; mkdir -p "$H/dotfiles/local"
 ln -s "$H/dotfiles/local" "$H/.local"
 HOME="$H" bash "$S/repo/install.sh" workflow --skills-only >/dev/null 2>&1; rc=$?
-chk "dotfile-managed local parent is refused" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
-chk "dotfile-managed local parent stays empty" "$(find "$H/dotfiles/local" -mindepth 1 | wc -l | tr -d ' ')" "0"
-chk "dotfile-managed local parent records no origin" "$([ -e "$H/.claude/.agent-config-origins" ] && echo yes || echo no)" "no"
+chk "dotfile-managed local parent is supported" "$([ $rc -eq 0 ] && echo yes || echo no)" "yes"
+chk "dotfile-managed local parent receives bin" "$([ -L "$H/dotfiles/local/bin/agent-init" ] && echo yes || echo no)" "yes"
+chk "dotfile-managed local parent records origin" "$([ -e "$H/.claude/.agent-config-origins" ] && echo yes || echo no)" "yes"
 
 echo "== 66a. partial uninstall removes only the selected product =="
 H="$S/h66u"; mkdir -p "$H/.codex"
@@ -1040,14 +1015,14 @@ chk "malformed Stop exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "ye
 chk "malformed Stop settings untouched" "$(cat "$H/.claude/settings.json")" "$before"
 chk "malformed Stop leaves no links" "$(find "$H" -type l | wc -l | tr -d ' ')" "0"
 
-echo "== 69. every requested baseline path is checked before mutation =="
+echo "== 69. existing baseline files are merged safely =="
 H="$S/h69"; mkdir -p "$H/.claude"
 printf '%s\n' 'mine' > "$H/.claude/CLAUDE.md"
 HOME="$H" bash "$S/repo/install.sh" full --baseline >/dev/null 2>&1
 rc=$?
-chk "baseline conflict exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
-chk "baseline occupant untouched" "$(cat "$H/.claude/CLAUDE.md")" "mine"
-chk "baseline conflict leaves no links" "$(find "$H" -type l | wc -l | tr -d ' ')" "0"
+chk "baseline merge succeeds" "$([ $rc -eq 0 ] && echo yes || echo no)" "yes"
+chk "baseline occupant stays first" "$(head -1 "$H/.claude/CLAUDE.md")" "mine"
+chk "baseline receives one managed block" "$(grep -c 'agent-config:start' "$H/.claude/CLAUDE.md")" "1"
 
 echo "== 70. selective installs prune only their own product =="
 H="$S/h70"; mkdir -p "$H/.claude/skills" "$H/.codex/skills"
@@ -1075,11 +1050,11 @@ chk "truncated workflow leaves no links" "$(find "$H" -type l | wc -l | tr -d ' 
 
 echo "== 72. --baseline requires its source before mutation =="
 mkdir -p "$S/no-baseline"; cp -R "$S/repo" "$S/no-baseline/repo"
-rm "$S/no-baseline/repo/AGENTS.md"
+rm "$S/no-baseline/repo/templates/AGENTS.global.md"
 H="$S/h72"; mkdir -p "$H/.codex"
 out="$(HOME="$H" bash "$S/no-baseline/repo/install.sh" workflow --baseline 2>&1)"; rc=$?
 chk "missing baseline exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
-chk "missing baseline explains the source" "$(grep -c 'missing AGENTS.md' <<<"$out")" "1"
+chk "missing baseline explains the source" "$(grep -c 'missing templates/AGENTS.global.md' <<<"$out")" "1"
 chk "missing baseline leaves no links" "$(find "$H" -type l | wc -l | tr -d ' ')" "0"
 
 echo "== 73. read-only nested destinations abort before mutation =="
@@ -1102,6 +1077,45 @@ chk "preexisting matching deny survives" \
 chk "unrelated deny survives" \
   "$(python3 -c "import json; print('Bash(mine:*)' in json.load(open('$H/.claude/settings.json'))['permissions']['deny'])")" "True"
 chk "deny ownership state is removed" "$([ -e "$H/.claude/settings.json.agent-config-deny.json" ] && echo yes || echo no)" "no"
+
+echo "== 75. every custom destination is writable before mutation =="
+H="$S/h75a"; mkdir -p "$H/.claude" "$H/.codex" "$H/dotfiles"
+printf '%s\n' 'mine' > "$H/dotfiles/CLAUDE.md"
+ln -s "$H/dotfiles/CLAUDE.md" "$H/.claude/CLAUDE.md"
+chmod 0444 "$H/dotfiles/CLAUDE.md"
+out="$(HOME="$H" bash "$S/repo/install.sh" standard 2>&1)"; rc=$?
+chk "read-only instruction target exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
+chk "read-only instruction target leaves no links" "$(find "$H/.claude" "$H/.codex" -type l ! -path '*/CLAUDE.md' | wc -l | tr -d ' ')" "0"
+chk "read-only instruction target leaves no settings" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
+chmod 0644 "$H/dotfiles/CLAUDE.md"
+
+H="$S/h75atomic"; mkdir -p "$H/.claude" "$H/.codex" "$H/dotfiles"
+printf '%s\n' 'mine' > "$H/dotfiles/CLAUDE.md"
+ln -s "$H/dotfiles/CLAUDE.md" "$H/.claude/CLAUDE.md"
+chmod 0555 "$H/dotfiles"
+out="$(HOME="$H" bash "$S/repo/install.sh" standard 2>&1)"; rc=$?
+chk "read-only atomic-write parent exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
+chk "read-only atomic-write parent leaves no links" "$(find "$H/.claude" "$H/.codex" -type l ! -path '*/CLAUDE.md' | wc -l | tr -d ' ')" "0"
+chk "read-only atomic-write parent leaves no settings" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
+chmod 0755 "$H/dotfiles"
+
+H="$S/h75search"; mkdir -p "$H/.claude" "$H/.codex" "$H/dotfiles"
+printf '%s\n' 'mine' > "$H/dotfiles/CLAUDE.md"
+ln -s "$H/dotfiles/CLAUDE.md" "$H/.claude/CLAUDE.md"
+chmod 0222 "$H/dotfiles"
+out="$(HOME="$H" bash "$S/repo/install.sh" standard 2>&1)"; rc=$?
+chk "non-searchable atomic-write parent exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
+chk "non-searchable parent leaves no links" "$(find "$H/.claude" "$H/.codex" -type l ! -path '*/CLAUDE.md' | wc -l | tr -d ' ')" "0"
+chk "non-searchable parent leaves no settings" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
+chmod 0755 "$H/dotfiles"
+
+H="$S/h75b"; mkdir -p "$H/locked"
+chmod 0555 "$H/locked"
+out="$(HOME="$H" CODEX_HOME="$H/locked/codex" bash "$S/repo/install.sh" standard 2>&1)"; rc=$?
+chk "read-only custom Codex parent exits nonzero" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
+chk "read-only custom Codex parent leaves no Claude skills" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
+chk "read-only custom Codex parent leaves no Claude settings" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
+chmod 0755 "$H/locked"
 
 echo
 echo "PASS $pass  FAIL $fail"

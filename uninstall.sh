@@ -20,6 +20,8 @@ while [[ -L "$_SRC" ]]; do
   [[ "$_SRC" != /* ]] && _SRC="$_DIR/$_SRC"
 done
 REPO="$(cd "$(dirname "$_SRC")" && pwd)"
+CLAUDE_ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CODEX_ROOT="${CODEX_HOME:-$HOME/.codex}"
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 skip() { printf '  \033[2m-\033[0m %s\n' "$1"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
@@ -64,7 +66,7 @@ REMOVE_OPERATOR=0
 # re-cloning the repo makes both scripts read our own previous symlinks as
 # someone else's: install refuses 21 paths it actually owns, and uninstall walks
 # away from 21 links it made, reporting success either way.
-ORIGINS="$HOME/.claude/.agent-config-origins"
+ORIGINS="$CLAUDE_ROOT/.agent-config-origins"
 _is_our_target() {
   # PATH BOUNDARY, not a bare prefix. `$t == "$REPO"*` also matched any path
   # that merely shares a string prefix with the clone, so a user's own
@@ -85,6 +87,7 @@ _is_our_target() {
   _ours_under() {
     [[ "$t" == "$1"/skills/* || "$t" == "$1"/operator-skills/* \
        || "$t" == "$1"/hooks/* || "$t" == "$1"/AGENTS.md \
+       || "$t" == "$1"/templates/AGENTS.global.md \
        || "$t" == "$1"/scripts/agent-init \
        || "$t" == "$1"/output-styles/* || "$t" == "$1"/how-to-use.html ]]
   }
@@ -109,7 +112,8 @@ _selected_target() {
        || "$t" == */skills/handoff ]] && return 0
   fi
   if (( REMOVE_WORKFLOW )); then
-    [[ "$t" == */AGENTS.md || "$t" == */how-to-use.html \
+    [[ "$t" == */AGENTS.md || "$t" == */templates/AGENTS.global.md \
+       || "$t" == */how-to-use.html \
        || "$t" == */scripts/agent-init ]] && return 0
     if [[ "$t" == */skills/* && "$t" != */skills/wizard \
           && "$t" != */skills/research && "$t" != */skills/handoff ]]; then
@@ -134,24 +138,31 @@ unlink_if_selected() {  # remove only a selected symlink owned by this repo
 # place. Retired output-style links remain so uninstall is complete on upgrade.
 LINK_DIRS=()
 (( REMOVE_WORKFLOW || REMOVE_OPERATOR )) \
-  && LINK_DIRS+=("$HOME/.claude/skills" "$HOME/.codex/skills")
-(( REMOVE_GUARD )) && LINK_DIRS+=("$HOME/.claude/hooks")
-(( REMOVE_OPERATOR )) && LINK_DIRS+=("$HOME/.claude/output-styles")
+  && LINK_DIRS+=("$CLAUDE_ROOT/skills" "$CODEX_ROOT/skills")
+(( REMOVE_GUARD )) && LINK_DIRS+=("$CLAUDE_ROOT/hooks")
+(( REMOVE_OPERATOR )) && LINK_DIRS+=("$CLAUDE_ROOT/output-styles")
 
 echo "Removing agent-config $PROFILE wiring ($REPO)"
 echo
 echo "Symlinks"
 if (( REMOVE_WORKFLOW )); then
-  for p in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" \
-           "$HOME/AGENTS.md" "$HOME/.claude/how-to-use.html" \
+  for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md" \
+           "$HOME/AGENTS.md" "$CLAUDE_ROOT/how-to-use.html" \
            "$HOME/.local/bin/agent-init"; do
     [[ -e "$p" || -L "$p" ]] || continue
     unlink_if_selected "$p"
   done
+  for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md"; do
+    if [[ -e "$p" || -L "$p" ]]; then
+      python3 "$REPO/scripts/manage_instructions.py" strip "$p" \
+        && ok "removed Agent Config routing from $p" \
+        || warn "could not remove Agent Config routing from $p"
+    fi
+  done
 fi
 
 for dir in "${LINK_DIRS[@]}"; do
-  [[ -d "$dir" && ! -L "$dir" ]] || continue
+  [[ -d "$dir" ]] || continue
   n=0
   for l in "$dir"/*; do
     if [[ -L "$l" ]] && _is_our_target "$(readlink "$l")" \
@@ -164,9 +175,9 @@ done
 
 echo
 echo "Hooks"
-SETTINGS="$HOME/.claude/settings.json"
+SETTINGS="$CLAUDE_ROOT/settings.json"
 if (( REMOVE_GUARD )) && [[ -f "$SETTINGS" ]]; then
-  if ! grep -qE 'python3?[^"]*[./]claude/hooks/(guard-(bash|files)|check-docs|welcome)\.py' "$SETTINGS" 2>/dev/null; then
+  if ! grep -qE 'agent-config-hook-v1|python3?[^\"]*[./]claude/hooks/(guard-(bash|files)|check-docs|welcome)\.py' "$SETTINGS" 2>/dev/null; then
     skip "settings.json has none of our hooks, left untouched"
   elif python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SETTINGS" 2>/dev/null; then
     cp "$SETTINGS" "$SETTINGS.bak-uninstall-$(date +%Y%m%d-%H%M%S)"
@@ -180,8 +191,8 @@ if (( REMOVE_GUARD )) && [[ -f "$SETTINGS" ]]; then
   fi
 fi
 
-CODEX_HOOKS="$HOME/.codex/hooks.json"
-if (( REMOVE_GUARD )) && [[ -f "$CODEX_HOOKS" && ! -L "$CODEX_HOOKS" ]] \
+CODEX_HOOKS="$CODEX_ROOT/hooks.json"
+if (( REMOVE_GUARD )) && [[ -f "$CODEX_HOOKS" ]] \
    && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CODEX_HOOKS" 2>/dev/null; then
   python3 "$REPO/scripts/install_codex_hooks.py" strip "$CODEX_HOOKS"
   ok "agent-config hooks stripped from Codex hooks.json"
@@ -201,14 +212,14 @@ done
 
 managed_state_remains() {
   local p dir l
-  for p in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" \
-           "$HOME/AGENTS.md" "$HOME/.claude/how-to-use.html" \
+  for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md" \
+           "$HOME/AGENTS.md" "$CLAUDE_ROOT/how-to-use.html" \
            "$HOME/.local/bin/agent-init"; do
     [[ -L "$p" ]] && _is_our_target "$(readlink "$p")" && return 0
   done
-  for dir in "$HOME/.claude/skills" "$HOME/.codex/skills" \
-             "$HOME/.claude/hooks" "$HOME/.claude/output-styles"; do
-    [[ -d "$dir" && ! -L "$dir" ]] || continue
+  for dir in "$CLAUDE_ROOT/skills" "$CODEX_ROOT/skills" \
+             "$CLAUDE_ROOT/hooks" "$CLAUDE_ROOT/output-styles"; do
+    [[ -d "$dir" ]] || continue
     for l in "$dir"/*; do
       [[ -L "$l" ]] && _is_our_target "$(readlink "$l")" && return 0
     done
@@ -223,7 +234,14 @@ if ! managed_state_remains; then
   rm -f "$ORIGINS"
 fi
 
+CONFLICT_STATE="$HOME/.local/share/agent-config/conflicts.json"
+if [[ -f "$CONFLICT_STATE" ]]; then
+  python3 "$REPO/scripts/manage_conflicts.py" restore "$CONFLICT_STATE" \
+    && ok "restored skills backed up during install" \
+    || warn "some backed-up skill conflicts could not be restored"
+fi
+
 echo
 echo "Done. Start a new agent session. The repo at $REPO is untouched."
-echo "Nothing of yours was moved to install, so nothing had to be put back."
-echo "Any recovery copies are still there; remove them once you are satisfied."
+echo "Existing configuration was preserved. Replaced skill conflicts were restored."
+echo "Recovery copies remain until you choose to remove them."

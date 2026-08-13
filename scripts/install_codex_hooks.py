@@ -102,8 +102,7 @@ def _validate(cfg):
 
 
 def _load(path):
-    if os.path.islink(path):
-        raise ValueError("hooks.json is a symlink; refusing to detach it")
+    path = os.path.realpath(path) if os.path.islink(path) else path
     if not os.path.exists(path):
         return {}, False
     with open(path) as f:
@@ -111,6 +110,7 @@ def _load(path):
 
 
 def _save(cfg, path):
+    path = os.path.realpath(path) if os.path.islink(path) else path
     rendered = json.dumps(cfg, indent=2) + "\n"
     try:
         with open(path) as f:
@@ -186,7 +186,7 @@ def strip(path):
     _remove_ours(cfg)
     if cfg.get("description") in LEGACY_DESCRIPTIONS | {DESCRIPTION}:
         del cfg["description"]
-    if not cfg:
+    if not cfg and not os.path.islink(path):
         os.unlink(path)
     else:
         _save(cfg, path)

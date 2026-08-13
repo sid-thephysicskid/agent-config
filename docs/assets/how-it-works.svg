@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 430" role="img" aria-labelledby="title desc">
-  <title id="title">How agent-config works</title>
-  <desc id="desc">Project instructions and a matching skill guide the coding agent. Before a tool runs, the guard either allows it or blocks it with a safer route.</desc>
+  <title id="title">How Agent Config works</title>
+  <desc id="desc">Shared instructions route work to a matching skill. Before a tool runs, the guard allows it or blocks it with a safer route.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 10 5 0 10z" fill="#334155"/>
@@ -16,18 +16,18 @@
   </defs>
 
   <rect width="1120" height="430" rx="20" fill="#f8fafc"/>
-  <text x="40" y="50" class="heading">Guidance before action. A check before execution.</text>
+  <text x="40" y="50" class="heading">Route the work. Check the action.</text>
 
   <g transform="translate(40 94)">
     <rect class="box" width="230" height="90" rx="12"/>
-    <text x="20" y="36" class="label">Project instructions</text>
-    <text x="20" y="65" class="body">Rules for this codebase</text>
+    <text x="20" y="36" class="label">Shared instructions</text>
+    <text x="20" y="65" class="body">Choose the current stage</text>
   </g>
 
   <g transform="translate(40 212)">
     <rect class="box" width="230" height="90" rx="12"/>
     <text x="20" y="36" class="label">Matching skill</text>
-    <text x="20" y="65" class="body">A focused work method</text>
+    <text x="20" y="65" class="body">Guide that stage of work</text>
   </g>
 
   <path class="line" d="M270 139h74v81h50"/>

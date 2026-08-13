@@ -189,14 +189,14 @@ class CodexHooksTest(unittest.TestCase):
         with open(self.path) as f:
             self.assertEqual(f.read(), before)
 
-    def test_rejects_a_symlink_instead_of_detaching_it(self):
+    def test_updates_a_symlink_target_without_detaching_it(self):
         target = self.path + ".target"
         os.rename(self.path, target)
         os.symlink(target, self.path)
         try:
-            with self.assertRaises(ValueError):
-                H.merge(self.path, "/opt/agent-config")
+            H.merge(self.path, "/opt/agent-config")
             self.assertTrue(os.path.islink(self.path))
+            self.assertTrue(H.check(self.path, "/opt/agent-config"))
         finally:
             os.unlink(self.path)
             os.unlink(target)

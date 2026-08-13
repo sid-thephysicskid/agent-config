@@ -16,6 +16,7 @@ first:
 
 Python 3.9, stdlib only.
 """
+import os
 import re
 
 from guard_parse import normalize_path, tokens
@@ -27,6 +28,27 @@ _GIT_CONTROL = re.compile(
 GUARD_OWN_FILES = re.compile(
     r"(^|/)\.(claude|codex)/(hooks(?:/|$)|settings\.json$|settings\.local\.json$"
     r"|hooks\.json$|CLAUDE\.md$)")
+
+
+def _is_guard_control_path(path):
+    if GUARD_OWN_FILES.search(path):
+        return True
+    roots = (
+        ("CLAUDE_CONFIG_DIR", ("hooks", "settings.json", "settings.local.json", "CLAUDE.md")),
+        ("CODEX_HOME", ("hooks", "hooks.json", "AGENTS.md")),
+    )
+    for variable, managed in roots:
+        root = os.environ.get(variable)
+        if not root:
+            continue
+        expanded = path.replace("${%s}" % variable, root).replace("$%s" % variable, root)
+        expanded = normalize_path(expanded)
+        base = normalize_path(root)
+        if any(expanded == base + "/" + name
+               or expanded.startswith(base + "/" + name + "/")
+               for name in managed):
+            return True
+    return False
 
 
 # Commands that unmake or overwrite a file. Writing to the guard is caught by
@@ -57,7 +79,7 @@ def check_guard_mutation(seg):
     targets = args if all_args else args[-1:]
     for tok in targets:
         p = normalize_path(tok.strip("'\""))
-        if GUARD_OWN_FILES.search(p) or _GIT_CONTROL.search(p):
+        if _is_guard_control_path(p) or _GIT_CONTROL.search(p):
             return (f"removing or overwriting '{tok}', which grants control "
                     "rather than storing data.",
                     "if a rule is wrong, change it in the repo and tell the human; "
@@ -109,7 +131,7 @@ def check_control_path(p, shown=None):
     if _GIT_CONTROL.search(p):
         return (f"direct write into .git internals ('{shown}').",
                 "use the matching git command instead of editing plumbing by hand")
-    if GUARD_OWN_FILES.search(p):
+    if _is_guard_control_path(p):
         return (f"write to '{shown}', which is the guard's own configuration.",
                 "if a rule is wrong, change it in the repo and re-run install.sh, "
                 "and tell the human rather than editing the installed copy")

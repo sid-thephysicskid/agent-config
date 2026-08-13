@@ -4,6 +4,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Changed
+
+- Made one install command add guardrails, workflow skills, and automatic routing.
+- Added optional extras through `--extras` instead of requiring profile selection.
+- Preserved and extended existing agent instructions through a removable managed block.
+- Added reversible handling for same-name skills, custom agent homes, and dotfile-managed paths.
+
 ## [0.1.1] - 2026-08-12
 
 ### Changed
