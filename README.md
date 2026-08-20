@@ -105,6 +105,10 @@ Do this instead: push your feature branch and open a PR
 It is a safety net, not a sandbox. Keep branch protection, least-privilege
 credentials, database roles, backups, CI, and human review.
 
+[docs/guard-coverage.md](docs/guard-coverage.md) lists what is refused, who
+this defends against, and the gaps that are accepted on purpose. It is generated
+from the rules, so it cannot drift from them.
+
 ## Optional extras
 
 Add `research`, `wizard`, `handoff`, and concise output styles:

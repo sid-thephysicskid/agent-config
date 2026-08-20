@@ -25,7 +25,7 @@
     "THIRD-PARTY-NOTICES.md",
     "VERSION",
     "bin/",
-    "docs/assets/",
+    "docs/",
     "hooks/",
     "install.sh",
     "operator-profiles/",
