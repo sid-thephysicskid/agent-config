@@ -1858,6 +1858,31 @@ CMD_CASES += [
     ("python3 - <<'PY'\nimport os\nos.system('rm -rf /')\nPY", FEAT, True),
 ]
 
+CMD_CASES += [
+    # ---- round 15: control paths are protected by LOCATION, not by shape ----
+    # The live config still blocks. `~` on purpose, not a literal home, so the
+    # verdict does not depend on whose machine runs the suite.
+    ("echo x > ~/.claude/CLAUDE.md", FEAT, True),
+    ("echo x > ~/.claude/settings.json", FEAT, True),
+    ("rm ~/.claude/hooks/guard-bash.py", FEAT, True),
+    ("echo x > ~/.codex/AGENTS.md", FEAT, True),
+    ("echo x > ~/.codex/hooks.json", FEAT, True),
+    # A PROJECT-level settings.json defines hooks and permissions for that
+    # project, so it grants control wherever it sits and stays shape-matched.
+    ("echo x > ./.claude/settings.json", FEAT, True),
+    ("rm ./.claude/hooks/mine.py", FEAT, True),
+    ("echo x > ./.codex/hooks.json", FEAT, True),
+    # COVERAGE GAP that hid the over-block: every case used the real home, so
+    # a rule keyed on the SHAPE `.claude/CLAUDE.md` looked correct. It also
+    # matched a throwaway HOME, which is what an installer fixture is, and a
+    # second profile under CLAUDE_CONFIG_DIR. Instruction files grant no
+    # permissions; they are prose, and agent-init and /init write them.
+    ("echo x > /tmp/fakehome/.claude/CLAUDE.md", FEAT, False),
+    ("echo x > /tmp/fakehome/.codex/AGENTS.md", FEAT, False),
+    ("echo x > ./CLAUDE.md", FEAT, False),
+    ("echo x > docs/CLAUDE.md", FEAT, False),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),

@@ -25,22 +25,30 @@ from guard_secrets import READ_SAFE_SECRET, _is_secret_path
 _GIT_CONTROL = re.compile(
     r"(^|/)\.git/(config|COMMIT_EDITMSG|HEAD|refs(?:/|$)|hooks(?:/|$))")
 
+# Matched on SHAPE, anywhere: a project-level `.claude/settings.json` defines
+# hooks and permissions for that project, so it grants control wherever it
+# sits. Instruction files are deliberately NOT here. CLAUDE.md and AGENTS.md
+# grant no permissions, they are prose, and `agent-init` and `/init` write
+# them as ordinary work. Protecting them by shape refused writing a throwaway
+# installer fixture and a second profile under CLAUDE_CONFIG_DIR. The live
+# ones are still protected, by location, in the loop below.
 GUARD_OWN_FILES = re.compile(
     r"(^|/)\.(claude|codex)/(hooks(?:/|$)|settings\.json$|settings\.local\.json$"
-    r"|hooks\.json$|CLAUDE\.md$)")
+    r"|hooks\.json$)")
 
 
 def _is_guard_control_path(path):
     if GUARD_OWN_FILES.search(path):
         return True
+    # Defaults, not just the env vars: without them the live global
+    # instruction file was only protected when CLAUDE_CONFIG_DIR was set.
     roots = (
-        ("CLAUDE_CONFIG_DIR", ("hooks", "settings.json", "settings.local.json", "CLAUDE.md")),
-        ("CODEX_HOME", ("hooks", "hooks.json", "AGENTS.md")),
+        ("CLAUDE_CONFIG_DIR", "~/.claude",
+         ("hooks", "settings.json", "settings.local.json", "CLAUDE.md")),
+        ("CODEX_HOME", "~/.codex", ("hooks", "hooks.json", "AGENTS.md")),
     )
-    for variable, managed in roots:
-        root = os.environ.get(variable)
-        if not root:
-            continue
+    for variable, default, managed in roots:
+        root = os.environ.get(variable) or default
         expanded = path.replace("${%s}" % variable, root).replace("$%s" % variable, root)
         expanded = normalize_path(expanded)
         base = normalize_path(root)
