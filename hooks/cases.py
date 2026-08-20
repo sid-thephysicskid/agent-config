@@ -1804,6 +1804,36 @@ CMD_CASES += [
     ("echo it's fine $(rm -rf /)", FEAT, True),
 ]
 
+CMD_CASES += [
+    # ---- round 13: a dry run writes nothing, so it is a preview ----
+    # git-clean(1) says --dry-run ignores clean.requireForce "as nothing will
+    # be deleted anyway", so `git clean -n -f` deletes nothing. The rule keyed
+    # on the -f and refused the exact preview its own fix line recommends.
+    ("git clean -n -f", MAIN, False),
+    ("git clean -f -n", MAIN, False),
+    ("git clean --dry-run -f", MAIN, False),
+    ("git clean -xdn", MAIN, False),
+    # git-push(1): --dry-run does "everything except actually send the updates"
+    ("git push --dry-run origin main", MAIN, False),
+    ("git push -n origin main", MAIN, False),
+    ("git push --dry-run --force origin main", FEAT, False),
+    # ...while every real write still blocks
+    ("git clean -f", MAIN, True),
+    ("git clean -xdf", MAIN, True),
+    ("git push origin main", MAIN, True),
+    ("git push --all origin", MAIN, True),
+    # THE TRAP that scopes this to push and clean only: `-n` is not universally
+    # a dry run. `git commit -n` is --no-verify and really does commit, so a
+    # blanket short-flag exemption would switch the branch rule off with one
+    # character. DRY_RUN_SUBS exists to keep these blocked.
+    ("git commit -n -m x", MAIN, True),
+    ("git commit -nm x", MAIN, True),
+    ("git commit --no-verify -m x", MAIN, True),
+    # A preview does not license the real thing later on the same line.
+    ("git push --dry-run origin main && git push origin main", MAIN, True),
+    ("git clean -n && git clean -fd", MAIN, True),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),
