@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Run the gates with nothing inherited from the developer's machine.
+#
+# Why this exists: several rules consult $HOME (DANGEROUS_ROOTS holds it, the
+# control-path rule defaults to ~/.claude), and a developer machine also has an
+# INSTALLED guard whose hooks may point at a different checkout entirely. Both
+# make a verdict depend on the host, and a host-dependent rule passes here and
+# fails for an adopter. `env -i` plus a throwaway HOME turns that dependence
+# into a failure instead of a false green.
+#
+# Only this checkout is exercised. The hooks installed on this machine are not
+# consulted, and nothing writes outside the sandbox.
+#
+# Stdlib and git only, so it runs identically in tests/Dockerfile. The node
+# gates are excluded on purpose: test_npx_cli.py needs a real npm, so it stays
+# in ci-local where a toolchain is assumed.
+set -uo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SANDBOX="$(mktemp -d)"
+trap 'rm -rf "$SANDBOX"' EXIT
+mkdir -p "$SANDBOX/home" "$SANDBOX/tmp"
+
+fail=0
+run() {
+  local label="$1"; shift
+  printf '  %-24s' "$label"
+  if env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+        HOME="$SANDBOX/home" TMPDIR="$SANDBOX/tmp" \
+        PYTHONDONTWRITEBYTECODE=1 LC_ALL=C.UTF-8 \
+        "$@" >"$SANDBOX/out" 2>&1; then
+    echo "ok"
+  else
+    echo "FAIL"
+    sed 's/^/      /' "$SANDBOX/out" | tail -25
+    fail=1
+  fi
+}
+
+cd "$REPO" || exit 1
+echo "sandbox HOME=$SANDBOX/home"
+run "guard rules"      python3 hooks/tests.py --no-perf
+run "guard floor"      python3 hooks/floor.py
+run "adapters"         python3 tests/adapters.py
+run "red team"         python3 evals/redteam.py evals/redteam-candidates.txt
+run "skills evals"     python3 evals/run_evals.py
+run "eval harness"     python3 evals/test_harness.py
+run "compliance metrics" python3 evals/compliance/test_metrics.py
+run "compliance session" python3 evals/compliance/test_session.py
+run "settings merge"   python3 tests/test_install_settings.py
+run "codex hooks"      python3 tests/test_install_codex_hooks.py
+run "install helpers"  python3 tests/test_install_helpers.py
+run "agent init"       python3 tests/test_agent_init.py
+run "wizard"           python3 operator-skills/wizard/tests/test_wizard.py
+run "installer"        bash tests/install_test.sh
+run "audit"            python3 tests/audit.py
+exit $fail
