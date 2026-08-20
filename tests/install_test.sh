@@ -1117,6 +1117,28 @@ chk "read-only custom Codex parent leaves no Claude skills" "$([ -e "$H/.claude/
 chk "read-only custom Codex parent leaves no Claude settings" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
 chmod 0755 "$H/locked"
 
+echo "== 76. --check proves the guard DECIDES, not just that it is wired =="
+# Case 40 catches a hook repointed at a no-op. This catches the other half: a
+# hook that is still our symlink, still named in settings.json, and dead,
+# because a rule module it imports no longer parses. The hook records a
+# fail-open and exits 0, so every wiring assertion above still passes while
+# the machine would accept a force push to a protected branch.
+H="$S/h76"; mkdir -p "$H"
+HOME="$H" bash "$S/repo/install.sh" guard >/dev/null 2>&1
+out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"; rc=$?
+chk "a healthy guard is proven live" "$(grep -c 'guard proven live' <<<"$out")" "1"
+chk "and the check passes" "$rc" "0"
+# The deliberate violation CONTRIBUTING.md asks for. Restored below.
+cp "$S/repo/hooks/guard_parse.py" "$S/guard_parse.orig"
+printf '\nbroken(\n' >> "$S/repo/hooks/guard_parse.py"
+out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"; rc=$?
+chk "a wired but dead guard is caught" "$(grep -c 'did NOT refuse' <<<"$out")" "1"
+chk "and the check fails" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
+chk "and the fail-open log is surfaced" "$(grep -c 'guard-failopen.log is not empty' <<<"$out")" "1"
+cp "$S/guard_parse.orig" "$S/repo/hooks/guard_parse.py"
+out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"
+chk "restoring the module restores the proof" "$(grep -c 'guard proven live' <<<"$out")" "1"
+
 echo
 echo "PASS $pass  FAIL $fail"
 [[ $fail -eq 0 ]] || exit 1

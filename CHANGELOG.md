@@ -4,6 +4,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Fixed
+
+- `doctor` and `--check` now prove the guard still decides, instead of only
+  proving it is wired. A rule module that no longer imports leaves every
+  symlink and settings entry intact, so the previous check reported "Guard
+  active" on a machine that would have accepted a destructive command.
+- `doctor` and `--check` now surface a non-empty `~/.claude/guard-failopen.log`.
+  The guard already recorded every fail-open and nothing ever read it.
+
 ### Changed
 
 - Made one install command add guardrails, workflow skills, and automatic routing.
