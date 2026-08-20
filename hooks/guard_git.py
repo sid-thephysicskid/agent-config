@@ -44,6 +44,14 @@ MIDDLE_SIGNALS = (
     r"\bfilter-(branch|repo)\b",
     r"\breflog\s+expire\b",
     r"\bupdate-ref\s+-d\b",
+    # Added with the rules below, per the note above: a rule with no
+    # signal here is a rule that stops applying once the line is padded
+    # past the analysis window. These five had rules and no signal.
+    r"\bbranch\s+-[\w-]*f(?![-\w])",
+    r"\bcheckout\s+-[\w-]*B(?![-\w])",
+    r"\bupdate-ref\s+refs/heads/",
+    r"\bsymbolic-ref\b",
+    r"\bcore\.hooksPath\b",
 )
 
 # Every git verb that writes a commit. `commit` alone left four ways onto a

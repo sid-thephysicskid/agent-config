@@ -24,6 +24,9 @@ from guard_git import (
 MIDDLE_SIGNALS = (
     r"\brm\s+-[\w-]*[rRf]",
     r"\bmkfs(\.\w+)?\b",
+    # `rm -rf` was here and the find spelling of the same act was not.
+    r"\bfind\b[^\n]{0,120}\s-delete\b",
+    r"\bfind\b[^\n]{0,120}-exec(?:dir)?\s+(?:\S*/)?rm\b",
     r"\bdd\b[^\n]{0,120}\bof=/dev/",
     r"\b(terraform|tofu|terragrunt)\b[^\n]{0,40}\bdestroy\b",
     r"\bkubectl\b[^\n]{0,60}\bdelete\b",

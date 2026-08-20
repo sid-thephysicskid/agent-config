@@ -1168,6 +1168,42 @@ HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
 HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
 chk "no spurious backup on a clean machine" "$([ -e "$H/.claude/CLAUDE.md.before-agent-config" ] && echo yes || echo no)" "no"
 
+echo "== 78. installer integrity: no half-wire, honest backups, honest uninstall =="
+# A dotfile-managed Codex hooks.json whose target does not exist got past every
+# preflight. The Claude half was fully wired, then the merge failed on the
+# missing parent, leaving Codex with skills and routing and no guardrails.
+H="$S/h78a"; mkdir -p "$H/.claude" "$H/.codex" "$H/dots"
+ln -s "$H/dots/sub/hooks.json" "$H/.codex/hooks.json"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "a dangling codex hooks.json aborts" "$([ $? -ne 0 ] && echo yes || echo no)" "yes"
+chk "and nothing was wired first" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
+chk "no claude settings either" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
+
+# On a machine with no settings.json, install #1 creates it and takes no
+# backup, so install #2 used to copy the ALREADY MODIFIED file under a name
+# that says "before" and hand it back as the recovery copy.
+H="$S/h78b"; mkdir -p "$H/.claude" "$H/.codex"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "no backup of a file we created" \
+  "$([ -e "$H/.claude/settings.json.before-agent-config" ] && echo yes || echo no)" "no"
+# ...while a genuinely pre-existing file still gets exactly one.
+H="$S/h78c"; mkdir -p "$H/.claude" "$H/.codex"
+echo '{"model":"opus"}' > "$H/.claude/settings.json"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "a pre-existing file is backed up" \
+  "$(grep -c '"model": *"opus"' "$H/.claude/settings.json.before-agent-config")" "1"
+chk "and the backup is untouched by us" \
+  "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json.before-agent-config" || true)" "0"
+
+# Losing the deny ownership sidecar left every rule in place and said nothing.
+H="$S/h78d"; mkdir -p "$H/.claude" "$H/.codex"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+rm -f "$H/.claude/settings.json.agent-config-deny.json"
+out="$(HOME="$H" bash "$S/repo/uninstall.sh" 2>&1)"
+chk "uninstall says which rules it left" "$(grep -c 'ownership record is missing' <<<"$out")" "1"
+
 echo
 echo "PASS $pass  FAIL $fail"
 [[ $fail -eq 0 ]] || exit 1

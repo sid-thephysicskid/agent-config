@@ -6,12 +6,71 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Fixed
 
-- `doctor` and `--check` now prove the guard still decides, instead of only
-  proving it is wired. A rule module that no longer imports leaves every
-  symlink and settings entry intact, so the previous check reported "Guard
-  active" on a machine that would have accepted a destructive command.
-- `doctor` and `--check` now surface a non-empty `~/.claude/guard-failopen.log`.
-  The guard already recorded every fail-open and nothing ever read it.
+Verification that claimed more than it established:
+
+- `doctor` and `--check` prove the guard still decides, instead of only proving
+  it is wired. A rule module that no longer imports leaves every symlink and
+  settings entry intact, so the check reported "Guard active" on a machine that
+  would have accepted a force push.
+- `doctor` and `--check` surface a non-empty `~/.claude/guard-failopen.log`. The
+  guard had recorded every fail-open since it was written and nothing read it.
+- The workflow banner counts what is linked instead of printing `13/13`. A
+  same-name skill you already had is kept by design, and the banner claimed
+  ours was active anyway.
+- The skills evaluator fails when its fixtures cannot be built, instead of
+  warning and exiting 0, and its summary reports what ran rather than what it
+  would have run.
+- Removed a coverage check that was defined, never wired in, and would have
+  failed if it had been.
+
+Guardrails that refused ordinary work:
+
+- A command substitution written inside single quotes is text. Documenting a
+  dangerous command was treated as running it.
+- A commit message is prose in every spelling, not only `-m`.
+- A git dry run is a preview. `clean` with both a dry-run and a force flag
+  deletes nothing, and a dry-run push sends nothing.
+- A piped bulk delete is judged on where the pipeline is rooted, the same way
+  the `-delete` spelling already was.
+- A CA bundle named as the trust store to verify with is public by role,
+  whatever the file is called.
+- Control paths are protected by location, not by filename shape, so a
+  throwaway fixture and a second profile are no longer refused.
+
+Guardrails that missed:
+
+- A flag between a wrapper and the binary no longer disables rules anchored on
+  the head of the command. Eleven shapes went through, including production
+  database connections and inline programs deleting system paths.
+- The credential gate detects current issuer formats. It matched an AWS key id
+  and never the secret.
+
+Installer:
+
+- Instruction files get a recovery copy before the first edit, and keep their
+  line endings. Text between pre-existing markers was destroyed with nothing to
+  restore from.
+- A dangling Codex `hooks.json` symlink aborts before anything is wired,
+  instead of after the whole Claude half.
+- A recovery copy is never taken of a file this installer created, so it cannot
+  hand back its own writes as the "before" state.
+- Uninstall says which deny rules it left behind when the ownership record is
+  missing, instead of leaving them silently.
+
+### Added
+
+- `docs/guard-coverage.md`, generated from the rules, with the threat model and
+  the accepted gaps. `SECURITY.md` defines a reportable bypass against it.
+- `scripts/sandbox` and `tests/Dockerfile`, to run the gates with nothing
+  inherited from the developer's machine.
+
+### Changed
+
+- Documented the guard-only install and the plugin marketplace. Both shipped
+  and neither was mentioned.
+- Stated the Python and Node floors that are actually tested.
+
+## [0.2.0] - 2026-08-13
 
 ### Changed
 

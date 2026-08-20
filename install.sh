@@ -655,6 +655,18 @@ if (( INSTALL_GUARD )) && [[ -L "$CLAUDE_ROOT/settings.json" && ! -e "$CLAUDE_RO
   die "$CLAUDE_ROOT/settings.json is a symlink pointing at something that does not exist. Fix or remove it first; installing over it would leave the hooks unwired."
 fi
 
+# A dangling Codex hooks.json is REPAIRED, not refused: the merge writes the
+# file through the link and case 18d pins that. It only fails when the target's
+# PARENT is missing too, because then there is nothing to create the file in,
+# and that failure used to land after the whole Claude half was already wired.
+# So the test is the parent directory, not the link.
+if (( INSTALL_GUARD )) && [[ -L "$CODEX_ROOT/hooks.json" && ! -e "$CODEX_ROOT/hooks.json" ]]; then
+  _codex_target="$(readlink "$CODEX_ROOT/hooks.json")"
+  [[ "$_codex_target" != /* ]] && _codex_target="$CODEX_ROOT/$_codex_target"
+  [[ -d "$(dirname "$_codex_target")" ]] \
+    || die "$CODEX_ROOT/hooks.json points into $(dirname "$_codex_target"), which does not exist. Create it or remove the link first; installing over it would wire Claude and leave Codex without guardrails."
+fi
+
 if (( INSTALL_GUARD && GUARD_READY )); then
   python3 "$REPO/scripts/install_settings.py" validate "$CLAUDE_ROOT/settings.json" 2>/dev/null \
     || die "$CLAUDE_ROOT/settings.json or its agent-config ownership state is invalid. Fix or move it first; this script will not rewrite state whose shape it does not understand."
@@ -808,7 +820,12 @@ SETTINGS="$CLAUDE_ROOT/settings.json"
 if (( GUARD_READY && ! CHECK )); then
   # One copy, once, before the first change. Not per-run: repeated installs
   # used to pile up identical backups.
-  if [[ -f "$SETTINGS" && ! -e "$SETTINGS.before-agent-config" ]]; then
+  # `! already_managed`: on a machine with no settings.json, install #1 CREATES
+  # it and correctly takes no backup, so install #2 saw a file with no backup
+  # sibling and copied the already-modified file under a name that says
+  # "before". The recovery copy contained our own hooks and deny rules.
+  if [[ -f "$SETTINGS" && ! -e "$SETTINGS.before-agent-config" ]] \
+     && ! grep -q 'agent-config-hook-v1' "$SETTINGS" 2>/dev/null; then
     cp "$SETTINGS" "$SETTINGS.before-agent-config"
     detail_warn "settings.json copied to settings.json.before-agent-config"
   fi
@@ -878,7 +895,9 @@ if [[ -d "$CODEX_ROOT" ]] || (( INSTALL_WORKFLOW )); then
   if (( INSTALL_GUARD )); then
     CODEX_HOOKS="$CODEX_ROOT/hooks.json"
     if (( GUARD_READY && ! CHECK )); then
-      if [[ -f "$CODEX_HOOKS" && ! -e "$CODEX_HOOKS.before-agent-config" ]]; then
+      # Same reasoning as the settings.json copy above.
+      if [[ -f "$CODEX_HOOKS" && ! -e "$CODEX_HOOKS.before-agent-config" ]] \
+         && ! grep -q 'guard-codex.py' "$CODEX_HOOKS" 2>/dev/null; then
         cp "$CODEX_HOOKS" "$CODEX_HOOKS.before-agent-config"
         detail_warn "hooks.json copied to hooks.json.before-agent-config"
       fi

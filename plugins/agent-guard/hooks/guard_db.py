@@ -22,6 +22,14 @@ MIDDLE_SIGNALS = (
     r"\brails\b[^\n]{0,40}\bdb:drop\b",
     r"\bartisan\b[^\n]{0,40}\bmigrate:fresh\b",
     r"\bdropDatabase\s*\(",
+    # NO production-host signal here, deliberately. The class stops
+    # applying once a line is padded past the analysis window, which is a
+    # real gap. The obvious signal is a host-flag pattern, and the one
+    # tried took 11.8s against this suite's 2.0s budget: it nests
+    # unbounded character classes over a 40KB middle. The hook times out
+    # at 5s and a timeout fails OPEN, so that signal would have opened a
+    # wider hole than it closed. The git and filesystem classes did get
+    # signals because theirs are literal and cheap.
     r"\bdeleteMany\s*\(\s*\{\s*\}\s*\)",
     r"\bdb\.\w+\.drop\s*\(\s*\)",
     r"\bdropdb\b",
