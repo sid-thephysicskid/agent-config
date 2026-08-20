@@ -19,7 +19,7 @@ That installs:
 Restart your coding agent after installation. Codex will ask you to review new
 hooks in `/hooks`.
 
-macOS and Linux are supported. You need Node 18 or newer and Python 3.8 or newer.
+macOS and Linux are supported. You need Node 20 or newer and Python 3.9 or newer.
 
 ### Existing setups
 

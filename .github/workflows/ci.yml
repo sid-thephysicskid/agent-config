@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # install.sh refuses anything below 3.8; 3.9 is the oldest runner
+        # install.sh refuses anything below 3.9, which is also the oldest runner
         # GitHub still offers, so it is the oldest this can prove. 3.13 catches
         # anything the newer parser rejects. If either breaks, an adopter breaks.
         python: ["3.9", "3.13"]
@@ -30,6 +30,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      # The npm CLI and onboarding tests below shell out to node. Pin the
+      # version package.json declares, or the only node ever exercised is
+      # whatever the runner happens to ship, and the stated floor is untested.
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "20"
 
       # --no-perf on CI: the wall-clock budgets flake on a shared runner and
       # say nothing about correctness. The big-instance DoS shapes still run
@@ -58,6 +64,20 @@ jobs:
 
       - name: project agent initializer
         run: python3 tests/test_agent_init.py
+
+      # These three ran only in scripts/ci-local, so they gated a release but
+      # never a pull request. test_onboarding.py is the only coverage of the
+      # README's "Existing setups" section through the npx path, and
+      # check-docs is the only thing that keeps the README and the packaged
+      # skills agreeing. Fourteen seconds for all three.
+      - name: onboarding through the npx path
+        run: python3 tests/test_onboarding.py
+
+      - name: installer helpers
+        run: python3 tests/test_install_helpers.py
+
+      - name: docs match code
+        run: ./scripts/check-docs
 
       - name: wizard tests
         run: python3 operator-skills/wizard/tests/test_wizard.py
