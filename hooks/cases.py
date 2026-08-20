@@ -1777,6 +1777,33 @@ CMD_CASES += [
     ('redis-cli -h localhost PING', FEAT, False),
 ]
 
+CMD_CASES += [
+    # ---- round 12: substitutions inside SINGLE quotes are text ----
+    # COVERAGE GAP that hid this: round 11 fixed prose carrying a substitution
+    # whose BODY was harmless (`$(date)`), so the direction looked covered. It
+    # was not. A single-quoted body that IS dangerous was still re-entered and
+    # blocked, and a POSIX shell expands nothing inside '...', so the command
+    # could never have run. Writing documentation about a dangerous command was
+    # treated as running it. Found by an agent doing ordinary work in this repo:
+    # it could not commit a message describing what the guard refuses.
+    ("echo 'never run `git push --force origin main`'", FEAT, False),
+    ("echo 'never run `rm -rf /`'", FEAT, False),
+    ("git commit -m 'docs: why `git push --force origin main` is refused'", FEAT, False),
+    ("printf '%s' 'run `terraform destroy` never'", FEAT, False),
+    ("echo 'never run $(rm -rf /)'", FEAT, False),
+    ("echo 'see `cat ~/.ssh/id_rsa` for the shape'", FEAT, False),
+    # ...while DOUBLE quotes really do expand, so nothing changes there.
+    ('echo "Deleted: $(rm -rf /)"', FEAT, True),
+    ('echo "run `git push --force origin main`"', FEAT, True),
+    ('echo "leaked: `cat ~/.ssh/id_rsa`"', FEAT, True),
+    # ...and a substitution OUTSIDE the quotes is still a substitution.
+    ("echo 'a' $(rm -rf /) 'b'", FEAT, True),
+    # An apostrophe that never closes means the skipping was guesswork, so the
+    # scan is redone quote-blind. One stray quote must not hide a live rm.
+    ("echo don't $(rm -rf /)", FEAT, True),
+    ("echo it's fine $(rm -rf /)", FEAT, True),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),

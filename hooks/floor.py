@@ -425,6 +425,13 @@ ORDINARY = [
     ('git diff hooks/guard_rules.py', FEAT),
     ('./install.sh --check', FEAT),
     ('bash tests/install_test.sh', FEAT),
+    # Writing about a dangerous command is not running it. Every one of these
+    # was refused, which is how an agent working inside this repo found the
+    # bug: it could not commit a message describing what the guard blocks.
+    # A POSIX shell expands nothing inside '...', so none of these can run.
+    ("echo 'never run `git push --force origin main`'", FEAT),
+    ("git commit -m 'docs: why `git push --force origin main` is refused'", FEAT),
+    ("printf '%s' 'do not run `rm -rf /` here'", FEAT),
 ]
 
 # --------------------------------------------------------------------------
