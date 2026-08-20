@@ -52,12 +52,13 @@ function fail(message) {
 function help() {
   process.stdout.write(`agent-config ${version}\n\n`);
   process.stdout.write("Usage:\n");
-  process.stdout.write("  agent-config install [--extras] [--keep-existing|--replace-conflicts]\n");
+  process.stdout.write("  agent-config install [guard] [--extras] [--keep-existing|--replace-conflicts]\n");
   process.stdout.write("  agent-config doctor [--extras]\n");
   process.stdout.write("  agent-config init\n");
   process.stdout.write("  agent-config uninstall\n\n");
   process.stdout.write("Install adds guardrails, 13 workflow skills, and automatic routing.\n");
   process.stdout.write("Use --extras to add research, wizard, handoff, and output styles.\n");
+  process.stdout.write("Use `install guard` for the guardrails alone, with no skills.\n");
 }
 
 function assertPlatform() {
@@ -174,10 +175,10 @@ function extrasInstalled() {
 
 function install(args) {
   assertPlatform();
-  const legacyProfile = args[0] && profiles.has(args[0]);
+  const explicitProfile = args[0] && profiles.has(args[0]);
   let profile = parseProfile(args, "standard");
   if (args.includes("--extras")) {
-    if (legacyProfile) fail("--extras cannot be combined with a legacy install profile");
+    if (explicitProfile) fail("--extras cannot be combined with an explicit profile");
     profile = "full";
     args = args.filter((arg) => arg !== "--extras");
   }
@@ -200,7 +201,7 @@ function doctor(args) {
     args.shift();
   }
   if (explicitProfile && args[0] === "--extras") {
-    fail("--extras cannot be combined with a legacy doctor profile");
+    fail("--extras cannot be combined with an explicit profile");
   }
   if (args.length) {
     fail(`unknown doctor option: ${args[0]}`);

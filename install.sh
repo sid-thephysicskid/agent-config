@@ -2,7 +2,7 @@
 # Wire this repo into Claude Code and Codex.
 #
 #   ./install.sh standard          guardrails, workflow, and routing
-#   ./install.sh guard             safety hooks only (legacy advanced profile)
+#   ./install.sh guard             safety hooks only, and the bare default
 #   ./install.sh workflow          skills, orchestration, and project init
 #   ./install.sh operator          optional human-in-the-loop utilities
 #   ./install.sh full              all three products
@@ -45,7 +45,7 @@ _profile_seen=0
 _extras_seen=0
 _bad_arg() {
   printf '\n  \033[31mABORTED:\033[0m %s\n' "$1" >&2
-  printf '  Usage: ./install.sh [standard|guard|workflow|operator|full] [--check] [--extras] [--keep-existing|--replace-conflicts]\n\n' >&2
+  printf '  Usage: ./install.sh [standard|guard(default)|workflow|operator|full] [--check] [--extras] [--keep-existing|--replace-conflicts]\n\n' >&2
   exit 1
 }
 # `--dry-run` used to perform a real install, so unknown flags remain fatal.

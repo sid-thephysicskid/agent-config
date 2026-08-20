@@ -109,6 +109,25 @@ credentials, database roles, backups, CI, and human review.
 this defends against, and the gaps that are accepted on purpose. It is generated
 from the rules, so it cannot drift from them.
 
+## Just the guard
+
+The guardrails install on their own, with no skills and no instruction files:
+
+```bash
+npx @sid-thephysicskid/agent-config@latest install guard
+```
+
+Claude Code users can install the same thing as a plugin instead, which needs
+no npx:
+
+```text
+/plugin marketplace add sid-thephysicskid/agent-config
+/plugin install agent-guard
+```
+
+The marketplace also carries `agent-workflow` and `agent-operator`, so the
+three parts can be adopted separately.
+
 ## Optional extras
 
 Add `research`, `wizard`, `handoff`, and concise output styles:
