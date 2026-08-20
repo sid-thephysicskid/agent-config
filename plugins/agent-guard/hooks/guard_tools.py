@@ -78,12 +78,6 @@ def check_rm(seg):
         if re.search(r"-name\s+['\"]?\.git['\"]?(\s|$)", seg) or root.endswith("/.git"):
             return ("a find that deletes .git directories (destroys the repositories).",
                     "if you meant to discard a clone, delete its parent directory instead")
-    # `parallel` is xargs with a different name, and was the only one of the
-    # two the rule could not see.
-    if re.search(r"\b(xargs|parallel)\b.*\brm\b", seg) \
-            or re.search(r"^\s*rm\b.*\b(xargs|parallel)\b", seg):
-        return ("rm driven by xargs/parallel (deletes whatever the previous stage produced).",
-                "write the list to a file, read it, then delete the specific paths")
     toks = tokens(seg)
     if not any(os.path.basename(t) == "rm" for t in toks):
         return None
@@ -113,6 +107,42 @@ def check_rm(seg):
             if hit:
                 return hit
     return None
+
+def check_xargs_rm(cmd):
+    """A bulk delete driven by the previous stage of a pipeline.
+
+    A WHOLE-LINE rule on purpose. Segments split on `|`, so the consumer never
+    sees the producer that decides whether the delete is dangerous, and judging
+    the consumer alone cannot see a system root at all.
+
+    Same test as the find branch, so the two spellings of one act agree.
+    Refusing this unconditionally meant the piped spelling of the daily
+    `*.pyc` cleanup was blocked while the `-delete` spelling of the identical
+    command was allowed. A guard that refuses the daily cleanup gets switched
+    off, which costs more than this rule ever bought.
+
+    Command position, not anywhere in the line: the tool name also matched a
+    FILENAME, so deleting a directory whose name merely contained it was
+    refused as if the tool were driving the delete.
+    """
+    if not re.search(r"(^|\|)\s*(xargs|parallel)\b", cmd):
+        return None
+    if not re.search(r"\brm\b", cmd):
+        return None
+    # No pipeline producer means the list arrives from a redirect or a file, so
+    # its contents are unknowable and there is nothing to judge but the act.
+    # Fail closed there, which is what the earlier unconditional rule got right.
+    if not re.search(r"\|\s*(xargs|parallel)\b", cmd):
+        return ("a bulk delete by xargs/parallel, fed from input the guard cannot see.",
+                "read the list and delete the specific paths you meant")
+    # normalize_path on EVERY token, not only the ones already absolute: `~`
+    # and `$HOME` name a home directory without a leading slash, and a producer
+    # of `echo ~` is exactly as dangerous as one of `echo /Users/someone`.
+    if any(_under_system_root(normalize_path(t)) for t in tokens(cmd)):
+        return ("a bulk delete driven by xargs/parallel under a system path.",
+                "narrow the producer, or list the matches first")
+    return None
+
 
 def _rm_target_verdict(t):
     """Judge ONE expanded rm operand."""

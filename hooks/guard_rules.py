@@ -498,6 +498,12 @@ def check_command(cmd, cwd=None):
 
     cmd = blank_inert_heredocs(cmd)
 
+    # Whole-line, before the per-segment phases: a pipeline consumer cannot see
+    # the producer that makes the delete dangerous.
+    hit = check_xargs_rm(cmd)
+    if hit:
+        return hit
+
     line = _Line(cmd, cwd)
     for idx, seg in enumerate(line.segs):
         line.seg, line.prose = seg, False

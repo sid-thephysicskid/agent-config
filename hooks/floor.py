@@ -440,6 +440,13 @@ ORDINARY = [
 # argument has to be had again from nothing.
 # --------------------------------------------------------------------------
 DECIDED = [
+    ('find /tmp -name "*.log" -mtime +7 -delete', FEAT, True,
+     "Blocked, and staying blocked. A top-level directory counts as a system "
+     "root, and exempting /tmp from that test is not local to this case: the "
+     "same predicate guards the rm rules, so it would also permit wiping all "
+     "of /tmp, which is every other process's scratch space. The friction is "
+     "small and the guard already names the fix, because narrowing the root "
+     "to /tmp/mycache is allowed and so is deleting that directory outright."),
     ('python3 - <<PY\ntext = "run: vercel --prod"\nopen("notes.md", "w").write(text)\nPY',
      FEAT, True,
      "Blocked, and it is documentation being written, not a deploy. Known "
