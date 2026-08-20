@@ -373,6 +373,17 @@ def main():
         elif want_reason and want_reason.lower() not in hit[0].lower():
             fails.append(f"  blocked for the WRONG reason: {cmd}\n"
                          f"      wanted {want_reason!r} in {hit[0]!r}")
+        # Same command, argv-shaped. A host may hand over ["bash","-lc",cmd]
+        # instead of a string, and the two must agree or one host runs weaker
+        # rules than the other on the same input. floor.py asserted this over
+        # its own 375 cases; 66 of the 1211 here disagreed, including an inline
+        # program deleting a system path and a pipe into a shell.
+        if isinstance(cmd, str):
+            argv = guard_rules.check_command(["bash", "-lc", cmd], cwd)
+            if (argv is not None) != got:
+                fails.append(f"  argv form disagrees with the string form: {cmd}\n"
+                             f"      string={'BLOCK' if got else 'allow'} "
+                             f"argv={'BLOCK' if argv else 'allow'}")
     for path, writing, should in PATH_CASES:
         got = guard_rules.check_path(path, writing) is not None
         if got != should:
