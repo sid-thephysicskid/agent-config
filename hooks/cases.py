@@ -1921,6 +1921,40 @@ CMD_CASES += [
     ("cat ./certs/server.pem", FEAT, True),
 ]
 
+CMD_CASES += [
+    # ---- round 17: a flag between the wrapper and the binary ----
+    # COVERAGE GAP that hid this: every wrapper case used the BARE spelling,
+    # `sudo psql`, which the strip handled. One flag in between stopped the
+    # strip dead, because a flag is neither a wrapper nor an assignment, and
+    # every rule anchored on the head of the command then missed. The bare and
+    # flagged spellings of one command disagreed.
+    ("sudo -u postgres psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
+    ("sudo -H psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
+    ("nice -n 10 psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
+    ("nice 10 psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
+    ("sudo -u mongo mongosh --eval \"db.dropDatabase()\"", FEAT, True),
+    ("nice -n 5 mongosh --eval \"db.dropDatabase()\"", FEAT, True),
+    ("sudo -u postgres -H psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
+    # The inline-program rule read RAW, so ANY prefix disabled it. It now reads
+    # the wrapper-free invocation instead. `stripped` cannot serve here: it may
+    # have been replaced by the -c PAYLOAD, which no longer names the runner.
+    ("sudo python3 -c \"import shutil; shutil.rmtree('/etc')\"", FEAT, True),
+    ("time python3 -c \"import shutil; shutil.rmtree('/etc')\"", FEAT, True),
+    ("PYTHONPATH=. python3 -c \"import shutil; shutil.rmtree('/etc')\"", FEAT, True),
+    ("nohup python3 -c \"import shutil; shutil.rmtree('/etc')\"", FEAT, True),
+    # THE TRAP that makes the value flags per-wrapper. `-n` is an adjustment to
+    # nice and non-interactive to sudo. One shared set would consume `psql` as
+    # if it were the value of sudo's -n, and open a bypass while closing one.
+    ("sudo -n psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
+    ("sudo -n rm -rf /", FEAT, True),
+    # ...and ordinary work with the same wrappers stays allowed.
+    ("sudo -u postgres psql -h localhost -c 'SELECT 1'", FEAT, False),
+    ("nice -n 10 pytest -q", FEAT, False),
+    ("sudo -u deploy ssh -i ~/.ssh/id_ed25519 deploy@host uptime", FEAT, False),
+    ("env FOO=1 python3 -c \"print(1)\"", FEAT, False),
+    ("sudo -H git status", FEAT, False),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),

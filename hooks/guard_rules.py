@@ -145,7 +145,7 @@ SEGMENT_RULES = (
     ("db-wipe", lambda seg, inv: check_db_wipe(inv.raw, stripped=inv.stripped)),
     ("rm", lambda seg, inv: check_rm(seg)),
     ("tools", lambda seg, inv: check_tools(seg)),
-    ("inline-code", lambda seg, inv: check_inline_code(inv.raw)),
+    ("inline-code", lambda seg, inv: check_inline_code(inv.unwrapped)),
 )
 
 _LAST_RULE = [None]

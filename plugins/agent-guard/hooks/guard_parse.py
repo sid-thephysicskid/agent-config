@@ -63,6 +63,61 @@ WRAPPERS = {"sudo", "env", "command", "builtin", "exec", "nohup", "time", "nice"
             "eval", "if", "while", "until", "then", "do", "else", "elif",
             "fi", "done", "!"}
 
+# Flags a wrapper consumes a VALUE for, PER WRAPPER. Not one shared set: `-n`
+# is an adjustment to nice and means non-interactive to sudo, so a shared set
+# would eat the real command after `sudo -n` and open a fresh bypass while
+# closing this one.
+_WRAPPER_VALUE_FLAGS = {
+    "sudo": {"-u", "-g", "-p", "-C", "-r", "-t", "-U", "--user", "--group"},
+    "nice": {"-n", "--adjustment"},
+    "env": {"-u", "-C", "--chdir", "--unset"},
+}
+_NEXT_TOKEN = re.compile(r"\s*(?P<tok>\S+)")
+
+
+def strip_wrapper_prefix(text):
+    """Drop leading wrapper words, their flags, and the values those consume.
+
+    The loop this replaces stopped at the first flag, because a flag is
+    neither a wrapper nor an assignment. So `sudo psql -h prod` was caught and
+    `sudo -u postgres psql -h prod` was not: one flag between the wrapper and
+    the binary disabled every rule anchored on the head of the command. The
+    same hole hid `nice -n 10`, `sudo -H`, and the inline-program rules.
+
+    Slices the ORIGINAL text rather than rejoining tokens, so quoting and
+    inner spacing survive for the rules that read them.
+    """
+    i, saw, current = 0, False, None
+    while True:
+        m = _NEXT_TOKEN.match(text, i)
+        if not m:
+            break
+        tok = m.group("tok")
+        if tok in WRAPPERS:
+            i, saw, current = m.end(), True, tok
+            continue
+        if "=" in tok and not tok.startswith("-"):
+            i, saw = m.end(), True
+            continue
+        if not saw:
+            break
+        # Only AFTER a wrapper: a flag here belongs to the wrapper, because a
+        # command's own flags cannot precede its name.
+        if tok.startswith("-"):
+            i = m.end()
+            if tok in _WRAPPER_VALUE_FLAGS.get(current, ()):
+                nxt = _NEXT_TOKEN.match(text, i)
+                if nxt:
+                    i = nxt.end()
+            continue
+        # `nice 10 cmd` is the flagless spelling of the adjustment.
+        if current == "nice" and tok.isdigit():
+            i = m.end()
+            continue
+        break
+    return text[i:] if saw else text
+
+
 # Beyond this, a "command" is file content rather than an instruction, and
 # scanning all of it costs far more than it protects.
 MAX_ANALYSED = 32 * 1024
@@ -529,13 +584,10 @@ def segments(cmd, _depth=0):
             # rules can still read the value.
             out.append(Segment(raw, "", depth))
             continue
-        toks = head.split()
         # An inline `KEY=value` prefix is stripped so the real command is seen,
         # but the ORIGINAL text is kept as `raw` because rules like the
         # production-database check need to inspect that assignment.
-        while toks and (toks[0] in WRAPPERS
-                        or ("=" in toks[0] and not toks[0].startswith("-"))):
-            toks = toks[1:]
+        toks = strip_wrapper_prefix(head).split()
         if not toks:
             out.append(Segment(raw, raw, depth))
             continue
@@ -670,6 +722,18 @@ class Invocation:
         if key not in self._memo:
             self._memo[key] = fn()
         return self._memo[key]
+
+    @property
+    def unwrapped(self):
+        """`raw` with only the wrapper prefix removed.
+
+        `stripped` cannot be used for this: it may have been replaced by a
+        `-c` PAYLOAD, which is a program rather than an invocation, so the
+        inline-program rule would no longer see the interpreter it needs to
+        match. `raw` keeps the invocation but also keeps the wrapper, and the
+        rule is anchored on the head, so `sudo node -e ...` slipped past.
+        """
+        return self._c("unwrapped", lambda: strip_wrapper_prefix(self.raw))
 
     @property
     def toks(self):
