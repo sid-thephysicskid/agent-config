@@ -43,6 +43,9 @@ def collect() -> Dict[str, object]:
 
     fixtures = guard_checks.Fixtures()
     fixtures.build()
+    # Recorded, not inferred. The summary used to describe what it WOULD have
+    # measured, so a machine with no git printed a healthy-looking report.
+    guard_ran = not fixtures.error
     try:
         findings.extend(guard_checks.check_prescribed_commands(skills, fixtures))
         claims = guard_checks.load_claims()
@@ -56,6 +59,7 @@ def collect() -> Dict[str, object]:
         "findings": findings,
         "coverage": guard_checks.command_coverage(skills),
         "claims": claims,
+        "guard_ran": guard_ran,
         "graph": static_checks.reference_graph(skills),
     }
 
@@ -133,9 +137,19 @@ def print_limits(data: Dict[str, object]) -> None:
     claims = data["claims"]
 
     print("\n== what this run measured, and what it did not ==")
-    print("  measured: %d skills, %d fenced command lines run past the live guard" % (len(skills), checked))
-    print("            (%d further fenced lines were not commands and were skipped)" % skipped)
-    print("  measured: %d stated guard behaviours, each pinned to the sentence that claims it" % len(claims))
+    # Reported from what RAN, not from re-parsing the inputs. These two lines
+    # used to be derived from the markdown and from the length of the claims
+    # file, so a run whose git fixtures never built printed the same numbers as
+    # a healthy one and exited 0. The counts described what it would have done.
+    if data.get("guard_ran"):
+        print("  measured: %d skills, %d fenced command lines run past the live guard" % (len(skills), checked))
+        print("            (%d further fenced lines were not commands and were skipped)" % skipped)
+        print("  measured: %d stated guard behaviours, each pinned to the sentence that claims it" % len(claims))
+    else:
+        print("  measured: %d skills, and NO command reached the live guard" % len(skills))
+        print("  NOT measured: every guard behaviour. The fixtures did not build,")
+        print("                so nothing was run past the guard and no claim was")
+        print("                checked. See the errors above.")
     print("  measured: links, cross-references, frontmatter, size, duplicated prose")
     print("  NOT measured: whether any skill improves an agent's output. That needs a")
     print("                fresh agent per task, with and without. See evals/README.md.")

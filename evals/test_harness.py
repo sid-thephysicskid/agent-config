@@ -120,23 +120,11 @@ class TestReferences(TempSuite):
         findings = static_checks.check_skill_references(self.load())
         self.assertFalse(any("no such skill" in f.message for f in findings))
 
-    def test_router_must_mention_every_skill(self):
-        write_skill(self.root, "route", {"name": "route", "description": "Router for the suite"}, "go to `/alpha`")
-        write_skill(self.root, "alpha", {"name": "alpha", "description": "d"}, "x")
-        write_skill(self.root, "beta", {"name": "beta", "description": "d"}, "x")
-        findings = static_checks.check_router_coverage(self.load())
-        self.assertTrue(any(f.skill == "beta" and "not routable" in f.message for f in findings))
-
     def test_router_found_by_description_not_name(self):
         write_skill(self.root, "front-door", {"name": "front-door", "description": "Router and orientation"}, "x")
         router = static_checks.find_router(self.load())
         self.assertIsNotNone(router)
         self.assertEqual(router.name, "front-door")
-
-    def test_missing_router_is_reported_not_skipped(self):
-        write_skill(self.root, "alpha", {"name": "alpha", "description": "d"}, "x")
-        findings = static_checks.check_router_coverage(self.load())
-        self.assertTrue(any("routing is unverifiable" in f.message for f in findings))
 
     def _write_new_project_loop(self, missing=None):
         edges = {

@@ -178,7 +178,11 @@ def check_prescribed_commands(skills: Sequence[SkillDoc], fixtures: Fixtures) ->
         return [
             Finding(
                 "guard-prescribed",
-                "warn",
+                # ERROR, not warn. A warn does not fail the run, so a
+                # machine with no git reported success while verifying
+                # nothing, and the summary printed the counts it had
+                # not measured. A harness that cannot run is not a pass.
+                "error",
                 "could not build git fixtures, guard checks did not run: %s" % fixtures.error,
             )
         ]
@@ -228,7 +232,11 @@ def check_guard_claims(fixtures: Fixtures, claims: Optional[List[dict]] = None) 
         return [
             Finding(
                 "guard-claims",
-                "warn",
+                # ERROR, not warn. A warn does not fail the run, so a
+                # machine with no git reported success while verifying
+                # nothing, and the summary printed the counts it had
+                # not measured. A harness that cannot run is not a pass.
+                "error",
                 "could not build git fixtures, claim checks did not run: %s" % fixtures.error,
             )
         ]

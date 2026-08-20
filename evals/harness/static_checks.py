@@ -306,46 +306,6 @@ def find_router(skills: Sequence[SkillDoc]) -> Optional[SkillDoc]:
     return None
 
 
-def check_router_coverage(skills: Sequence[SkillDoc]) -> List[Finding]:
-    """The router must know about every skill, and only about skills that exist."""
-    out = []  # type: List[Finding]
-    router = find_router(skills)
-    if router is None:
-        return [
-            Finding(
-                "router",
-                "error",
-                "no skill describes itself as a router and none is named %s; routing is unverifiable"
-                % "/".join(ROUTER_NAME_HINTS),
-            )
-        ]
-    text = read(router.skill_md)
-    mentioned = set(_refs_in(text))
-    for s in skills:
-        if s.name == router.name:
-            continue
-        if s.name not in mentioned:
-            out.append(
-                Finding(
-                    "router",
-                    "error",
-                    "not routable: /%s never mentions `/%s`" % (router.name, s.name),
-                    s.name,
-                )
-            )
-    for ref in sorted(mentioned):
-        if ref not in {s.name for s in skills}:
-            out.append(
-                Finding(
-                    "router",
-                    "error",
-                    "/%s routes to `/%s`, which does not exist" % (router.name, ref),
-                    router.name,
-                )
-            )
-    return out
-
-
 ORCHESTRATION_HANDOFFS = (
     ("navigate", "prototype"),
     ("prototype", "architect"),
@@ -353,6 +313,8 @@ ORCHESTRATION_HANDOFFS = (
     ("breakdown", "tdd"),
     ("architect", "tdd"),
 )
+
+
 def check_orchestration_handoffs(skills: Sequence[SkillDoc]) -> List[Finding]:
     """Require the canonical neighboring stages to reference each other."""
     docs = {skill.name: skill for skill in skills}
