@@ -173,5 +173,8 @@ jobs:
           git ls-files --error-unmatch AGENTS.local.md >/dev/null 2>&1 \
             && { echo "AGENTS.local.md is tracked and must not be"; exit 1; } || true
 
+      - name: credential gate detects current issuer formats
+        run: python3 tests/test_audit_patterns.py
+
       - name: no secrets or credentials
         run: python3 tests/audit.py

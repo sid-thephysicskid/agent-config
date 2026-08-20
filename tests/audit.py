@@ -67,11 +67,33 @@ def read(f):
 SECRETS = [
     (r"gh[pousr]_[A-Za-z0-9]{20,}", "GitHub token"),
     (r"sk-ant-[A-Za-z0-9_-]{20,}", "Anthropic key"),
+    # `sk-[A-Za-z0-9]{32,}` alone missed every CURRENT issuer format, because
+    # the segment after `sk-` breaks on the first hyphen or underscore:
+    # sk-proj- is OpenAI's default today, and sk_live_ is Stripe. The pattern
+    # right above this one already showed that keys carry separators.
+    (r"sk-proj-[A-Za-z0-9_-]{20,}", "OpenAI project key"),
     (r"sk-[A-Za-z0-9]{32,}", "OpenAI-style key"),
+    (r"sk_(live|test)_[A-Za-z0-9]{20,}", "Stripe secret key"),
+    (r"rk_(live|test)_[A-Za-z0-9]{20,}", "Stripe restricted key"),
     (r"AKIA[0-9A-Z]{16}", "AWS access key id"),
+    # The id was matched and the SECRET never was, so the half that actually
+    # grants access could be committed while the gate reported clean. Anchored
+    # on an assignment, because 40 base64 characters on their own are not a
+    # distinctive enough shape to refuse a merge over.
+    (r"(?i)aws_secret_access_key\s*[:=]\s*['\"]?[A-Za-z0-9/+=]{40}", "AWS secret access key"),
+    (r"AIza[0-9A-Za-z_-]{35}", "Google API key"),
+    (r"ya29\.[0-9A-Za-z_-]{20,}", "Google OAuth token"),
+    (r"npm_[A-Za-z0-9]{36}", "npm token"),
     (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "private key block"),
     (r"xox[baprs]-[A-Za-z0-9-]{10,}", "Slack token"),
-    (r"postgres(ql)?://[^\s'\"]*:[^\s'\"@]{6,}@", "database URL with a password"),
+    (r"xapp-[0-9]-[A-Za-z0-9-]{10,}", "Slack app token"),
+    (r"glpat-[A-Za-z0-9_-]{20,}", "GitLab token"),
+    (r"dop_v1_[a-f0-9]{64}", "DigitalOcean token"),
+    (r"hf_[A-Za-z0-9]{30,}", "Hugging Face token"),
+    # Any client, not just one. postgres was matched and mysql, mongodb and
+    # redis were not, though the compliance fixtures use exactly those shapes.
+    (r"(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp|clickhouse)://"
+     r"[^\s'\"/]*:[^\s'\"@/]{6,}@", "database URL with a password"),
 ]
 # Files whose entire purpose is to LOOK like a credential, listed one by one
 # rather than by pattern. The compliance harness needs a fixture holding a

@@ -52,5 +52,6 @@ run "install helpers"  python3 tests/test_install_helpers.py
 run "agent init"       python3 tests/test_agent_init.py
 run "wizard"           python3 operator-skills/wizard/tests/test_wizard.py
 run "installer"        bash tests/install_test.sh
+run "audit patterns"   python3 tests/test_audit_patterns.py
 run "audit"            python3 tests/audit.py
 exit $fail
