@@ -366,6 +366,18 @@ def _written_then_run(opener, executed):
     # Compare on the basename too: `cat > ./x.sh` then `bash x.sh` is one file.
     return bool({target, target.lstrip("./"), os.path.basename(target)} & executed)
 
+# A commit message or PR body is prose, and these consumers store stdin
+# without ever executing it. `git commit -m "..."` was already exempt, because
+# check_git strips quoted runs before matching, so ONLY the heredoc spellings
+# were refused: exactly the spelling any message longer than one line uses. The
+# effect was that an agent could not describe what the guard blocks in a commit
+# message. The unquoted-delimiter and pipe checks below still apply, so
+# `git commit -F - <<EOF` carrying a live $(...) is still scanned.
+MESSAGE_FILE_OPENER = re.compile(
+    r"(^|\s)git\s+(commit|tag|notes)\b[^|]*?\s(-F|--file)(=|\s*)-(?=\s|$)"
+    r"|(^|\s)gh\b[^|]*?\s(--body-file|--notes-file)(=|\s*)-(?=\s|$)")
+
+
 def blank_inert_heredocs(cmd):
     """Blank heredoc bodies that are file CONTENT rather than executed input.
 
@@ -406,7 +418,8 @@ def blank_inert_heredocs(cmd):
                      and not INTERPRETER.search(opener)
                      and not is_sql_context(opener)
                      and "|" not in opener
-                     and re.search(r"(^|\s)(cat|tee|dd)\b|>\s*[^\s|&]+", opener))
+                     and (re.search(r"(^|\s)(cat|tee|dd)\b|>\s*[^\s|&]+", opener)
+                          or MESSAGE_FILE_OPENER.search(opener)))
             # ...and only if nothing LATER in this same command runs the file
             # it was written to. `cat > /tmp/x.sh <<EOF ... EOF; bash /tmp/x.sh`
             # is one tool call: the body is right there and it does execute.

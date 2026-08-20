@@ -1834,6 +1834,30 @@ CMD_CASES += [
     ("git clean -n && git clean -fd", MAIN, True),
 ]
 
+CMD_CASES += [
+    # ---- round 14: a message is prose in every spelling, not just -m ----
+    # COVERAGE GAP that hid this: every message-exemption case used the -m
+    # form, which check_git already covers by stripping quoted runs. The
+    # heredoc spellings were never tested, and they are the ones used for any
+    # message longer than one line. Found by an agent working in this repo: it
+    # could not write a commit message describing what the guard refuses.
+    ("git commit -F - <<'EOF'\nfix: explain why git clean -f is refused\nEOF", FEAT, False),
+    ("git commit -F - <<'EOF'\ndocs: git push --force origin main is refused\nEOF", FEAT, False),
+    ("git commit --file=- <<'EOF'\nfix: note that rm -rf / is blocked\nEOF", FEAT, False),
+    ("gh pr create --body-file - <<'EOF'\nwe refuse git clean -f here\nEOF", FEAT, False),
+    # The exemption blanks the MESSAGE, not the branch rule.
+    ("git commit -F - <<'EOF'\nfix: an ordinary message\nEOF", MAIN, True),
+    # ...and the controls that keep the exemption narrow.
+    # An UNQUOTED delimiter expands the body before git stores it, so a
+    # substitution in there runs now and must still block.
+    ("git commit -F - <<EOF\nnote: $(rm -rf /)\nEOF", FEAT, True),
+    ("gh pr create --body-file - <<EOF\n$(rm -rf /)\nEOF", FEAT, True),
+    # The exemption must not survive a pipe into a shell.
+    ("git commit -F - <<'EOF' | bash\nrm -rf /\nEOF", FEAT, True),
+    # A real interpreter reading a heredoc is untouched.
+    ("python3 - <<'PY'\nimport os\nos.system('rm -rf /')\nPY", FEAT, True),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),

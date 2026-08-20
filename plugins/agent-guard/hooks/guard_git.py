@@ -181,6 +181,29 @@ def git_invocations(seg):
                 break
     return found
 
+# Subcommands where git defines a dry run that writes NOTHING. Scoped on
+# purpose, not applied to every verb: the short `-n` is not universal, and
+# `git commit -n` is --no-verify, which really does commit. Honouring `-n`
+# there would turn the protected-branch rule off with one flag.
+#   git-clean(1): "-n, --dry-run  Don't actually remove anything ...
+#     Configuration variable clean.requireForce is ignored, as nothing will
+#     be deleted anyway." So `git clean -n -f` deletes nothing.
+#   git-push(1):  "-n, --dry-run  Do everything except actually send the
+#     updates."
+DRY_RUN_SUBS = ("push", "clean")
+
+
+def _is_dry_run(seg, sub):
+    """Does this invocation carry a dry-run flag that makes it a preview?"""
+    if sub not in DRY_RUN_SUBS:
+        return False
+    if re.search(r"--dry-run(?![-\w])", seg):
+        return True
+    # A short cluster: -n, -nd, -xdn, -nf. The lookbehind keeps this off the
+    # second dash of a long option, so --no-verify does not read as -n.
+    return bool(re.search(r"(?<![\w-])-[a-zA-Z]*n[a-zA-Z]*(?=\s|$)", seg))
+
+
 DESTRUCTIVE_GIT = (
     (r"\breset\s+.*--hard", "git reset --hard (discards committed and staged work)",
      "git stash  or  git revert <sha>"),
@@ -413,6 +436,11 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
                         "git checkout -b feature/<name>   (branch there, then open a PR)")
 
         if sub == "push":
+            # A dry-run push sends nothing, so every push rule below is moot
+            # for it. `continue`, not `return None`: a later invocation on the
+            # same line still has to be judged.
+            if _is_dry_run(seg, sub):
+                continue
             # Quotes REMOVED before the refspec scans. They are not part of the
             # refspec, and `git push origin 'main'` was allowed while
             # `git push origin main` blocked. Also normalise `refs/heads/main`
@@ -463,6 +491,8 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
         # scan the segment with quoted runs removed.
         scan = strip_quoted(seg) if sub in (
             "commit", "tag", "notes", "log", "show", "grep", "blame") else seg
+        if _is_dry_run(seg, sub):
+            continue
         for pat, what, fix in DESTRUCTIVE_GIT:
             if re.search(pat, scan):
                 return (what, fix)

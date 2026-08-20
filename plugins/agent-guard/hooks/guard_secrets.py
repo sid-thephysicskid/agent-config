@@ -275,14 +275,42 @@ EXCLUDE_FLAG = re.compile(r"^--(exclude|ignore|exclude-from|exclude-tag)(=|$)")
 # pattern for the `--flag=value` spelling: a second list of the same flag names
 # is what let the two forms disagree about which command takes which flag.
 
-def _substitution_bodies(seg):
+def _substitution_bodies(seg, quote_aware=True):
     """The contents of every `$(...)` and backtick run, nesting included.
 
     A non-recursive regex could not span an inner substitution, so
     `echo "$(cat $(pwd)/.env)"` produced no body at all and read the file.
+
+    SINGLE-QUOTED regions are skipped. A POSIX shell preserves every
+    character inside '...' literally, so a substitution written there is
+    text and can never run. Scanning it anyway refused ordinary work:
+    writing documentation ABOUT a dangerous command was treated as running
+    it, which is how `git commit -m 'docs: why <force push> is refused'`
+    came back BLOCKED. Double quotes DO expand, so they are still scanned:
+    `echo "Deleted: $(rm -rf /tmp/build)"` really does run the rm.
+
+    If the single quotes do not balance, the scan is redone quote-blind.
+    One stray apostrophe must not be able to hide a live substitution
+    behind it, as in `echo don't $(rm -rf /)`.
     """
     out, i, n = [], 0, len(seg)
+    in_single = in_double = False
     while i < n and len(out) < MAX_SUBSTITUTIONS:
+        if quote_aware and in_single:
+            # No escape character exists inside single quotes, so the very
+            # next quote ends the run.
+            if seg[i] == "'":
+                in_single = False
+            i += 1
+            continue
+        if quote_aware and seg[i] == "'" and not in_double:
+            in_single = True
+            i += 1
+            continue
+        if quote_aware and seg[i] == '"':
+            in_double = not in_double
+            i += 1
+            continue
         if seg.startswith("$(", i):
             depth, j = 1, i + 2
             while j < n and depth:
@@ -304,6 +332,13 @@ def _substitution_bodies(seg):
             i = j + 1
         else:
             i += 1
+    # Ending inside a single-quoted run means the quotes never closed, so the
+    # skipping above was guesswork. Redo it quote-blind rather than let one
+    # stray apostrophe swallow a live substitution: `echo don't $(rm -rf /)`
+    # is not valid shell, but a parser that hides the rm is the wrong way to
+    # be wrong about it.
+    if quote_aware and in_single:
+        return _substitution_bodies(seg, quote_aware=False)
     return out
 
 def check_substitutions(seg):
