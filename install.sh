@@ -404,6 +404,13 @@ route_instructions() {  # route_instructions <host instruction path>
     python3 "$REPO/scripts/manage_instructions.py" check "$path" "$source" \
       && ok "$path routing block" || err "$path routing block missing or stale"
   else
+    # One recovery copy before the first edit, the same rule settings.json
+    # gets. Instruction files had none, and the merge replaces whatever sits
+    # between the markers: a user who had already used those exact markers
+    # lost the text inside them with nothing to restore from.
+    if [[ ! -e "$path.before-agent-config" ]]; then
+      cp "$path" "$path.before-agent-config"
+    fi
     python3 "$REPO/scripts/manage_instructions.py" merge "$path" "$source" \
       || die "could not merge routing instructions into $path"
     ok "$path preserved with Agent Config routing"
@@ -425,10 +432,10 @@ GUARD_READY=1
 if (( INSTALL_GUARD )); then
   if command -v python3 >/dev/null 2>&1; then
     PYV="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)'; then
+    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)'; then
       ok "python3 $PYV"
     else
-      die "python3 is $PYV; 3.8 or newer is required."
+      die "python3 is $PYV; 3.9 or newer is required."
       GUARD_READY=0
     fi
   else
@@ -934,6 +941,29 @@ if (( INSTALL_GUARD && GUARD_READY )); then
   fi
 fi
 
+# Measured, not asserted. A same-name skill the user already had is KEPT by
+# design, but that means ours is NOT the one running, and the banner claimed
+# 13/13 regardless: --check printed it and exited 0 on a HOME where none of
+# ours was installed. Same defect the guard banner had.
+workflow_active() {
+  local n=0 s
+  for s in "${WORKFLOW_SKILLS[@]}"; do
+    [[ -L "$CLAUDE_ROOT/skills/$s" ]] \
+      && _is_our_target "$(readlink "$CLAUDE_ROOT/skills/$s")" \
+      && n=$((n+1))
+  done
+  echo "$n"
+}
+report_workflow() {
+  local have total="${#WORKFLOW_SKILLS[@]}"
+  have="$(workflow_active)"
+  if [[ "$have" == "$total" ]]; then
+    status "Workflow active: $have/$total"
+  else
+    warn "Workflow active: $have/$total (the rest are skills you already had)"
+  fi
+}
+
 (( COMPACT )) || echo
 if (( CHECK )); then
   if (( PROBLEMS )); then
@@ -942,7 +972,7 @@ if (( CHECK )); then
   fi
   if [[ "$PROFILE" == standard || "$PROFILE" == full ]]; then
     status "Guard active"
-    status "Workflow active: 13/13"
+    report_workflow
     status "Claude Code + Codex routing active"
   else
     echo "Check complete: all good."
@@ -950,7 +980,7 @@ if (( CHECK )); then
 else
   if [[ "$PROFILE" == standard || "$PROFILE" == full ]]; then
     status "Guard active"
-    status "Workflow active: 13/13"
+    report_workflow
     status "Claude Code + Codex routing active"
     warn "Restart your agent, then review Codex hooks with /hooks"
   elif [[ "$PROFILE" == guard ]]; then

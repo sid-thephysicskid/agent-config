@@ -1139,6 +1139,35 @@ cp "$S/guard_parse.orig" "$S/repo/hooks/guard_parse.py"
 out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"
 chk "restoring the module restores the proof" "$(grep -c 'guard proven live' <<<"$out")" "1"
 
+echo "== 77. instruction files are recoverable and keep their line endings =="
+# The merge replaces whatever sits between the markers. A user who had already
+# used those exact markers lost the text inside them, and instruction files got
+# no recovery copy at all, so it was unrecoverable. settings.json always had one.
+H="$S/h77a"; mkdir -p "$H/.claude" "$H/.codex"
+printf 'MY RULES\n<!-- agent-config:start -->\nMY OWN TEXT\n<!-- agent-config:end -->\nafter\n' > "$H/.claude/CLAUDE.md"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "a recovery copy is kept" "$([ -f "$H/.claude/CLAUDE.md.before-agent-config" ] && echo yes || echo no)" "yes"
+chk "their text is recoverable" "$(grep -c 'MY OWN TEXT' "$H/.claude/CLAUDE.md.before-agent-config" 2>/dev/null || echo 0)" "1"
+# A CRLF file was rewritten to LF, whole file, with nothing to restore from.
+H="$S/h77b"; mkdir -p "$H/.claude" "$H/.codex"
+printf 'MY RULES\r\nsecond line\r\n' > "$H/.claude/CLAUDE.md"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "CRLF survives install" "$([ "$(tr -dc '\r' < "$H/.claude/CLAUDE.md" | wc -c | tr -d ' ')" -ge 2 ] && echo yes || echo no)" "yes"
+out="$(HOME="$H" bash "$S/repo/install.sh" standard --check 2>&1)"
+chk "and the block is not reported stale" "$(grep -c 'missing or stale' <<<"$out")" "0"
+HOME="$H" bash "$S/repo/uninstall.sh" >/dev/null 2>&1
+chk "uninstall leaves CRLF intact" "$(od -c "$H/.claude/CLAUDE.md" | head -1 | grep -c '\\r')" "1"
+# ...and an LF file must not gain carriage returns.
+H="$S/h77c"; mkdir -p "$H/.claude" "$H/.codex"
+printf 'MY RULES\nsecond\n' > "$H/.claude/CLAUDE.md"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "an LF file stays LF" "$(tr -dc '\r' < "$H/.claude/CLAUDE.md" | wc -c | tr -d ' ')" "0"
+# A clean machine gets a symlink, not a merge, so it needs no backup.
+H="$S/h77d"; mkdir -p "$H/.claude" "$H/.codex"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "no spurious backup on a clean machine" "$([ -e "$H/.claude/CLAUDE.md.before-agent-config" ] && echo yes || echo no)" "no"
+
 echo
 echo "PASS $pass  FAIL $fail"
 [[ $fail -eq 0 ]] || exit 1
