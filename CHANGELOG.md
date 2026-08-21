@@ -2,10 +2,11 @@
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-08-21
 
-Bugs, and a repository 39% smaller: 29,367 tracked lines to 17,187, 236 files
-to 108. No guard rule and no test case was removed.
+Bugs, and a repository 39% smaller: 29,367 tracked lines to 17831, 236 files
+to 108. No guard rule and no test case was removed, and the rule corpus grew
+from 1,244 cases to 1,593.
 
 ### Fixed
 

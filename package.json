@@ -1,6 +1,6 @@
 {
   "name": "@sid-thephysicskid/agent-config",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Auditable guardrails and focused delivery workflows for coding agents.",
   "license": "MIT",
   "author": "Sid Abhinav",

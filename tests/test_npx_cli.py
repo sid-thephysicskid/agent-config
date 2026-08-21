@@ -11,6 +11,9 @@ from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLI = os.path.join(ROOT, "bin", "agent-config.js")
+# From the file that owns it. This was written out five times, so a
+# release meant five edits and a red suite until all five were found.
+VERSION = open(os.path.join(ROOT, "VERSION")).read().strip()
 
 
 class NpxCliTest(unittest.TestCase):
@@ -32,12 +35,12 @@ class NpxCliTest(unittest.TestCase):
             # The guardrails install on their own. Pinned because that path was
             # shipped, called legacy in the usage text, and documented nowhere.
             self.assertIn("install guard", help_text)
-            self.assertEqual(self.run_cli(home, "--version").stdout.strip(), "0.2.0")
+            self.assertEqual(self.run_cli(home, "--version").stdout.strip(), VERSION)
 
     def test_guard_round_trip_uses_stable_versioned_payload(self):
         with tempfile.TemporaryDirectory() as home:
             result = self.run_cli(home, "install", "guard")
-            stable = os.path.join(home, ".local", "share", "agent-config", "0.2.0")
+            stable = os.path.join(home, ".local", "share", "agent-config", VERSION)
             self.assertEqual(result.returncode, 0)
             self.assertTrue(os.path.isfile(os.path.join(stable, "install.sh")))
             hook = os.path.join(home, ".claude", "hooks", "guard-bash.py")
@@ -60,7 +63,7 @@ class NpxCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             self.run_cli(home, "install", "guard")
             staged = os.path.join(home, ".local", "share", "agent-config",
-                                  "0.2.0", "install.sh")
+                                  VERSION, "install.sh")
             with open(staged, "a", encoding="utf-8") as fh:
                 fh.write("\n# tampered\n")
             result = self.run_cli(home, "install", "guard", check=False)
@@ -113,7 +116,7 @@ class NpxCliTest(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertEqual(executed.stdout.strip(), "0.2.0")
+            self.assertEqual(executed.stdout.strip(), VERSION)
 
     def test_packed_tarball_installs_and_removes_standard_setup(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -141,7 +144,7 @@ class NpxCliTest(unittest.TestCase):
             subprocess.run(prefix + ["install", "--replace-conflicts"], cwd=directory, env=env,
                            text=True, capture_output=True, check=True)
             hook = os.path.join(home, ".claude", "hooks", "guard-bash.py")
-            stable = os.path.join(home, ".local", "share", "agent-config", "0.2.0")
+            stable = os.path.join(home, ".local", "share", "agent-config", VERSION)
             self.assertTrue(os.path.islink(hook))
             self.assertTrue(os.readlink(hook).startswith(stable + os.sep))
             self.assertTrue(os.path.islink(os.path.join(
