@@ -4,6 +4,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+Bugs, and a repository 39% smaller: 29,367 tracked lines to 17,187, 236 files
+to 108. No guard rule and no test case was removed.
+
 ### Fixed
 
 Verification that claimed more than it established:
@@ -20,8 +23,18 @@ Verification that claimed more than it established:
 - The skills evaluator fails when its fixtures cannot be built, instead of
   warning and exiting 0, and its summary reports what ran rather than what it
   would have run.
-- Removed a coverage check that was defined, never wired in, and would have
-  failed if it had been.
+- An argv-shaped tool call reached a different verdict than the same command
+  as a string. 66 of the suite's cases disagreed, every one blocking as a
+  string and passing as argv, including an inline program deleting a system
+  path. The suite now asserts the two agree on every case.
+- Five git rules and two filesystem rules stopped applying once a command was
+  padded past the analysis window, which the rule that owns that list says
+  must never happen.
+- The guard's own test fixtures inherited the developer's `~/.gitconfig`. With
+  `commit.gpgsign` set, the fixture commits never happen and the suite fails
+  for reasons unrelated to the change under test.
+- Two of five git-state caches stored the answer given when the subprocess
+  budget was spent, freezing it for the rest of the process.
 
 Guardrails that refused ordinary work:
 
@@ -74,6 +87,22 @@ Installer:
   hand and policed by six tests, serving an install path that was never
   documented. `npx ... install guard` is the guard-only path.
 - Stated the Python and Node floors that are actually tested.
+- Removed the compliance experiment: 4,486 lines with no coupling to the
+  product, whose one published result was withdrawn and whose confirmatory run
+  was never executed. `evals/README.md` records what was withdrawn and why.
+- Merged `hooks/floor.py` into `hooks/cases.py`. Its cases were written against
+  the job rather than the rules and that method stays, under a THE FLOOR
+  banner; a coverage measurement showed the second file and its second runner
+  reached no line the first did not.
+- Cut six skill checks that had never produced an error, with the six test
+  classes and three scorecard columns that served them. The four that remain
+  can all fail.
+- One cached, budgeted git question in `hooks/guard_repo.py` instead of five
+  copies of it. One key-walker in the Codex adapter instead of two. One
+  fixture builder for the evals instead of a second one that scrubbed the
+  environment differently.
+- The accepted-gap corpus explains each decision once and cites it by tag,
+  instead of pasting the same paragraph up to twelve times.
 
 ## [0.2.0] - 2026-08-13
 
