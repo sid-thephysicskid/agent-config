@@ -35,7 +35,6 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "hooks"))
 
 import cases  # noqa: E402
-import floor  # noqa: E402
 import guard_git  # noqa: E402
 import guard_rules  # noqa: E402
 import guard_tools  # noqa: E402
@@ -52,13 +51,7 @@ TABLES = (
 def corpus():
     """Every command the suites judge, with the cwd and verdict they expect."""
     out = []
-    for case in cases.CMD_CASES:
-        out.append((case[0], case[1], case[2]))
-    for cmd in floor.LIABILITY:
-        out.append((cmd if isinstance(cmd, str) else cmd[0], MAIN, True))
-    for cmd in floor.ORDINARY:
-        out.append((cmd if isinstance(cmd, str) else cmd[0], FEAT, False))
-    return out
+    return [(case[0], case[1], case[2]) for case in cases.CMD_CASES]
 
 
 def verdicts(commands):

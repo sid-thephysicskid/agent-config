@@ -20,7 +20,7 @@ DOC = os.path.join(ROOT, "docs", "guard-coverage.md")
 BEGIN = "<!-- BEGIN GENERATED: scripts/guard-coverage -->"
 END = "<!-- END GENERATED -->"
 
-import floor  # noqa: E402
+import cases  # noqa: E402
 import guard_db  # noqa: E402
 import guard_git  # noqa: E402
 import guard_tools  # noqa: E402
@@ -33,9 +33,9 @@ LISTS = (
     ("Database destruction", [r.reason for r in guard_db.DB_WIPE_RULES]),
 )
 COUNTS = (
-    ("Liability shapes refused", len(floor.LIABILITY)),
-    ("Ordinary commands allowed", len(floor.ORDINARY)),
-    ("Decisions recorded with a reason", len(floor.DECIDED)),
+    ("Commands refused", sum(1 for c in cases.CMD_CASES if c[2])),
+    ("Ordinary commands allowed", sum(1 for c in cases.CMD_CASES if not c[2])),
+    ("Path cases", len(cases.PATH_CASES)),
 )
 
 

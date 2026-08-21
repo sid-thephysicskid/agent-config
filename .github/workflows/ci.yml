@@ -43,9 +43,6 @@ jobs:
       - name: rule suite
         run: python3 hooks/tests.py --no-perf
 
-      - name: floor suite
-        run: python3 hooks/floor.py
-
       # The layer a defect silently disables everything behind.
       - name: adapter suite
         run: python3 tests/adapters.py

@@ -42,7 +42,6 @@ fi
 # name | needs node | command
 GATES=(
   "rule suite|no|python3 hooks/tests.py --no-perf"
-  "floor suite|no|python3 hooks/floor.py"
   "adapters|no|python3 tests/adapters.py"
   "red team|no|python3 evals/redteam.py evals/redteam-candidates.txt"
   "skills evals|no|python3 evals/run_evals.py"

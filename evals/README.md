@@ -58,6 +58,6 @@ These evaluations do not establish:
 - that results generalize beyond the included fixtures, hosts, or models.
 
 Guard correctness is tested separately by `hooks/tests.py` and
-`hooks/floor.py`. A behavioral skill evaluation would require fresh sessions
+`hooks/tests.py`. A behavioral skill evaluation would require fresh sessions
 with and without each skill, fixed tasks, blind scoring, and published null
 results.

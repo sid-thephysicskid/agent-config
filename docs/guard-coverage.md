@@ -37,9 +37,10 @@ them instead of pretending to a completeness they cannot have.
 
 ## How well it holds
 
-Two suites, and the split is the point. `hooks/tests.py` grades the guard
-against its own stated rules. `hooks/floor.py` grades it against the job, using
-independent incident-shaped cases written without looking at the implementation.
+`hooks/tests.py` runs every case in both the string and argv forms a host can
+deliver. Its corpus has two halves: cases written against the rules, and a
+block written against the JOB, chosen by asking what incident a rule is for
+without looking at the implementation.
 
 An accepted gap is not a defect. It is a shape someone tried, decided was out of
 scope, and wrote down, so the next person does not have to rediscover the
@@ -112,8 +113,8 @@ argument. Read them before reporting a bypass.
 
 | Measure | Count |
 |---|---|
-| Liability shapes refused | 131 |
-| Ordinary commands allowed | 233 |
-| Decisions recorded with a reason | 11 |
+| Commands refused | 832 |
+| Ordinary commands allowed | 684 |
+| Path cases | 32 |
 | Red-team candidates leaking untriaged | 0, or CI fails |
 <!-- END GENERATED -->

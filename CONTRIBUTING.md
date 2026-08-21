@@ -27,16 +27,20 @@ of this.
 
 ## Changing a guard rule
 
-There are **two** suites, and the split is the point:
-
 ```bash
-python3 hooks/tests.py --no-perf   # grades the guard against its own rules
-python3 hooks/floor.py             # grades the guard against the job
+python3 hooks/tests.py --no-perf   # every case, both string and argv forms
+python3 hooks/tests.py             # and the wall-clock budgets
 ```
 
-Run both. A change that passes only one of them has not been tested. `tests.py`
-checks the stated rules. `floor.py` checks independent incident-shaped cases.
-`--no-perf` omits unstable local timing checks; CI runs those separately.
+`--no-perf` omits the timing checks, which are unstable on a loaded machine;
+CI runs them in their own job. A hung hook fails OPEN, so those budgets are a
+safety gate rather than a speed one.
+
+`hooks/cases.py` has two kinds of case and the distinction is worth keeping.
+Most were written against the rules. The block marked THE FLOOR was written
+against the JOB, by asking what incident this is for without looking at the
+implementation, which is how nine live leaks were found with the rule suite
+green.
 
 Every new BLOCK rule needs **two** cases in `hooks/cases.py`: the command it must block, and an ALLOW case for the nearest legitimate command it must not. Without the second one, nothing pins the false-positive direction, and a guard that cries wolf gets switched off.
 
