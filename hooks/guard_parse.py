@@ -488,6 +488,20 @@ def blank_inert_heredocs(cmd):
         i += 1
     return "\n".join(lines)
 
+# Does this inline program hand a string to a shell or to another process?
+# `python3 -c "print('kubectl delete ns x')"` names a command; the same program
+# with os.system RUNS it. The quoted literal is data in the first and a payload
+# in the second, so the rules may only treat it as prose when none of these
+# appear.
+PROGRAM_EXECUTES = re.compile(
+    r"\b(os\.(system|popen|exec\w*|spawn\w*)"
+    r"|subprocess\.\w+|commands\.getoutput"
+    r"|child_process|execSync|spawnSync|\bexecFile\b"
+    r"|Kernel#?system|IO\.popen|%x\{"
+    r"|shell_exec|passthru|proc_open"
+    r"|\bsystem\s*\(|\bexec\s*\(|\beval\s*\()", re.I)
+
+
 # Characters that can start a new command inside an unwrapped payload.
 SPLITTER_HINT = re.compile(r"[;&|\n]")
 

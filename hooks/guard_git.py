@@ -106,15 +106,30 @@ def _safe_force_with_lease(seg, branch):
     another ref does not protect the ref being rewritten.
     """
     args = _args_after(seg, "push") or []
-    lease = [arg for arg in args if arg.startswith("--force-with-lease")]
-    if not lease:
-        return False
-    if len(lease) != 1 or len(args) != 1 or not branch \
-            or branch in PROTECTED_BRANCHES:
+    lease = [i for i, arg in enumerate(args)
+             if arg.startswith("--force-with-lease")]
+    if len(lease) != 1 or not branch or branch in PROTECTED_BRANCHES:
         return False
     match = re.fullmatch(
-        r"--force-with-lease=([^:]+):([0-9a-fA-F]{40})", lease[0])
-    return bool(match and match.group(1) == branch)
+        r"--force-with-lease=([^:]+):([0-9a-fA-F]{40})", args[lease[0]])
+    if not match or match.group(1) != branch:
+        return False
+    # The lease pins the current branch to a full SHA, which is the whole
+    # protection. What follows may name the REMOTE and a refspec for that same
+    # branch, because that is how the command is actually typed and how /ship
+    # step 7 teaches it. Requiring the lease to be the only argument meant a
+    # user who followed this rule's own fix line, then appended `origin
+    # <branch>` from muscle memory, got the identical refusal again. A guard
+    # whose remediation does not unblock you is the one people switch off.
+    rest = [a for i, a in enumerate(args)
+            if i != lease[0] and not a.startswith("-")]
+    for i, arg in enumerate(rest):
+        if i == 0 and ":" not in arg:
+            continue                                   # the remote
+        if arg in (branch, "HEAD:" + branch, branch + ":" + branch):
+            continue                                   # this branch, no other
+        return False
+    return True
 
 def _exempt_from_branch_rule(sub_cmd, seg):
     # Only in the verb's own flags, and only before a redirect or a `--`.
