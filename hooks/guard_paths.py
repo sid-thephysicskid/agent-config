@@ -70,6 +70,14 @@ def _is_guard_control_path(path):
 _UNMAKE_ALL_ARGS = re.compile(
     r"(^|[\s;&|(])(rm|unlink|mv|shred|truncate|chmod|chown|ln|tee)\b")
 _UNMAKE_LAST_ARG = re.compile(r"(^|[\s;&|(])(cp|install|rsync)\b")
+# In-place editors. Without the flag these READ and write to stdout, which
+# is legitimate; with it they rewrite the file, which is the same act as
+# tee. `sed -i` is the commonest way an agent edits a file from a shell,
+# and it was the one verb missing from the two lists above.
+_UNMAKE_IN_PLACE = re.compile(
+    r"(^|[\s;&|(])(sed\b[^|;&]{0,80}?\s-[a-zA-Z]*i"
+    r"|(perl|ruby)\b[^|;&]{0,80}?\s-[a-zA-Z]*i"
+    r"|patch\b)")
 
 
 def check_guard_mutation(seg):
@@ -79,7 +87,8 @@ def check_guard_mutation(seg):
     removals happen inside it, where no tool call exists to inspect.
     """
     text = str(seg)
-    all_args = bool(_UNMAKE_ALL_ARGS.search(text))
+    all_args = bool(_UNMAKE_ALL_ARGS.search(text)
+                    or _UNMAKE_IN_PLACE.search(text))
     last_arg = bool(_UNMAKE_LAST_ARG.search(text))
     if not (all_args or last_arg):
         return None

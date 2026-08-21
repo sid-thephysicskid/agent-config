@@ -456,7 +456,10 @@ def _phase_writes(line, idx):
         hit = check_control_path(normalize_path(target), target)
         if hit:
             return hit
-    return check_guard_mutation(line.seg)
+    # RAW, not seg. For an interpreter the segment may have been replaced
+    # by its `-e` PAYLOAD, so `perl -pi -e s/a/b/ <guard file>` arrived here
+    # as the program `s/a/b/` with the path it rewrites already gone.
+    return check_guard_mutation(line.raw)
 
 
 def _phase_rules(line, idx):

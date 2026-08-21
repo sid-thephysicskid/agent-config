@@ -415,6 +415,12 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
     if re.match(r"^\s*(curl|wget)\b", head):
         identity_flags |= {"--cacert", "--capath",
                            "--ca-certificate", "--ca-directory"}
+        # NOT --cert or --key. Those name a client certificate and its private
+        # half, which is key material. --cert already blocked because its value
+        # looks like a key path; --key did not, and one blocking while the other
+        # does not is the inconsistency worth closing.
+        for flag in ("--key", "--cert"):
+            identity_flags.discard(flag)
     if METADATA_ONLY.match(head) and not FIND_ACTS.search(seg) and not piped:
         return None
     # A searcher's first non-flag operand is its PATTERN. `ls -la | grep .env`

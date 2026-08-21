@@ -2336,6 +2336,32 @@ CMD_CASES += [
     ('docker system prune -af --volumes', FEAT, False),
 ]
 
+CMD_CASES += [
+    # ---- round 18: an in-place edit is a write ----
+    # COVERAGE GAP that hid this: the unmake lists named rm, mv, cp, tee, chmod
+    # and ln, and every case used one of them. An in-place editor rewrites the
+    # file just as surely, and it is the commonest way an agent edits a file
+    # from a shell. Found by an acceptance review, not by the suite.
+    ("sed -i s/a/b/ ~/.claude/hooks/guard-bash.py", FEAT, True),
+    ("sed -i s/a/b/ ~/.claude/settings.json", FEAT, True),
+    ("sed -i s/a/b/ ./.claude/settings.json", FEAT, True),
+    ("sed -i s/a/b/ .git/hooks/pre-commit", FEAT, True),
+    ("patch ~/.claude/hooks/guard-bash.py < d.diff", FEAT, True),
+    # An interpreter's -e payload REPLACES the segment, so the path it rewrites
+    # was gone before the write rule saw it. That phase now reads the raw text.
+    ("perl -pi -e s/a/b/ ~/.claude/hooks/guard-bash.py", FEAT, True),
+    # ...while the same tools reading, or editing an ordinary file, are work.
+    ("sed -i s/a/b/ src/app.py", FEAT, False),
+    ("sed s/a/b/ ~/.claude/settings.json", FEAT, False),
+    ("perl -ne print src/app.py", FEAT, False),
+    # A client certificate's PRIVATE half is key material. --cert already
+    # blocked because its value looks like a key path and --key did not, and
+    # one blocking while the other does not is the inconsistency.
+    ("curl --key ~/.ssh/id_rsa https://x", FEAT, True),
+    ("curl --cert ~/.ssh/id_rsa https://x", FEAT, True),
+    ("curl --cacert ./certs/mycorp.pem https://x", FEAT, False),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),
