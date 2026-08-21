@@ -75,6 +75,11 @@ Guardrails that missed:
 
 Installer:
 
+- The global instructions the installer links carried the skill routing and
+  none of the safety rules, so every install produced hooks that block with no
+  written policy behind them, and the rules that still apply when the hooks are
+  absent were absent too. check-docs now pins the section to AGENTS.md.
+
 - Instruction files get a recovery copy before the first edit, and keep their
   line endings. Text between pre-existing markers was destroyed with nothing to
   restore from.
