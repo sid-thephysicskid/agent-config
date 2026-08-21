@@ -55,6 +55,7 @@ GATES=(
   "audit|no|python3 tests/audit.py"
   "docs match code|no|./scripts/check-docs"
   "python syntax|no|python3 -W error::SyntaxWarning -m compileall -q hooks/ evals/ operator-skills/ scripts/ tests/"
+  "shellcheck|no|bash scripts/shellcheck-if-present"
   "DoS budgets|no|python3 hooks/tests.py"
   "release metadata|yes|python3 tests/test_release_metadata.py"
   "npm CLI|yes|python3 tests/test_npx_cli.py"

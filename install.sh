@@ -972,7 +972,7 @@ PROBES
   # The signal already existed and nothing ever surfaced it. A non-empty log
   # means the guard has gone quiet at least once on this machine.
   if [[ -s "$CLAUDE_ROOT/guard-failopen.log" ]]; then
-    warn "~/.claude/guard-failopen.log is not empty: the guard has failed open before. Read it."
+    warn "$CLAUDE_ROOT/guard-failopen.log is not empty: the guard has failed open before. Read it."
   fi
 fi
 

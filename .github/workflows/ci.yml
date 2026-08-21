@@ -135,7 +135,9 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=warning install.sh uninstall.sh tests/install_test.sh
+          # Same list as scripts/shellcheck-if-present, which runs it locally
+          # when installed. A tilde inside a quoted message reached CI once.
+          shellcheck --severity=warning install.sh uninstall.sh tests/install_test.sh scripts/gates
 
       # No pipe. Piping into `tail` hands the step `tail`'s exit status, so this
       # gate reported success over a SyntaxError for as long as it existed.
