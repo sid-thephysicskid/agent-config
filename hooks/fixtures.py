@@ -12,9 +12,19 @@ import tempfile
 
 HOME = os.path.expanduser("~")
 
+# The developer's git config is not part of the fixture. Without these, every
+# repo built here inherits whatever is in ~/.gitconfig: core.hooksPath makes
+# `git commit` run somebody's hook, commit.gpgsign can make it fail outright,
+# and init.defaultBranch changes the branch a case is judged on. The verdict
+# then depends on whose machine ran the suite, which is the whole class of bug
+# scripts/sandbox exists to catch.
+ENV = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull,
+           GIT_CONFIG_SYSTEM=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+
+
 def mkrepo(branch, commit=True):
     d = tempfile.mkdtemp()
-    q = dict(cwd=d, capture_output=True, text=True)
+    q = dict(cwd=d, capture_output=True, text=True, env=ENV)
     subprocess.run(["git", "init", "-q"], **q)
     subprocess.run(["git", "symbolic-ref", "HEAD", f"refs/heads/{branch}"], **q)
     if commit:
@@ -36,7 +46,7 @@ def mkdetached():
     an interactive rebase leave you. `branch --show-current` prints nothing and
     `rev-parse --abbrev-ref` answers the literal string HEAD."""
     d = mkrepo("main")
-    q = dict(cwd=d, capture_output=True, text=True)
+    q = dict(cwd=d, capture_output=True, text=True, env=ENV)
     subprocess.run(["git", "commit", "-qm", "second", "--allow-empty"], **q)
     sha = subprocess.run(["git", "rev-parse", "HEAD~1"], **q).stdout.strip()
     subprocess.run(["git", "checkout", "-q", sha], **q)
