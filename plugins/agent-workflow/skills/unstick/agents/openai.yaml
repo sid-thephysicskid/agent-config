@@ -1,3 +1,0 @@
-interface:
-  display_name: "Unstick"
-  short_description: "Resolve merge and rebase conflicts"

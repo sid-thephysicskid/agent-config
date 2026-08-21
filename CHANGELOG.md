@@ -66,8 +66,11 @@ Installer:
 
 ### Changed
 
-- Documented the guard-only install and the plugin marketplace. Both shipped
-  and neither was mentioned.
+- Documented the guard-only install, which shipped and was never mentioned.
+- Removed the plugin marketplace and the `plugins/` tree: 6,390 lines that
+  were 98% a byte-identical copy of `hooks/` and `skills/`, kept in sync by
+  hand and policed by six tests, serving an install path that was never
+  documented. `npx ... install guard` is the guard-only path.
 - Stated the Python and Node floors that are actually tested.
 
 ## [0.2.0] - 2026-08-13

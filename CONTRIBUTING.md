@@ -49,12 +49,6 @@ Before opening a PR, run the repository audit:
 python3 tests/audit.py   # no credentials, no personal details, no dead skill links
 ```
 
-To build the standalone Claude Code and Codex plugin artifacts:
-
-```bash
-./scripts/build-plugins ./dist-plugins
-```
-
 ## Commits
 
 `type: description`, lowercase, imperative, no trailing period, subject under 72 characters. Types: `feat`, `fix`, `chore`, `docs`, `test`, `ci`, `refactor`. Small and atomic, each commit a coherent unit.
