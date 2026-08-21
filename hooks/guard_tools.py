@@ -144,6 +144,20 @@ def check_xargs_rm(cmd):
     if any(_under_system_root(normalize_path(t)) for t in tokens(cmd)):
         return ("a bulk delete driven by xargs/parallel under a system path.",
                 "narrow the producer, or list the matches first")
+    # A producer that ENUMERATES UNTRACKED FILES is as dangerous as a system
+    # root, and the paths it emits are relative so the root test cannot see it.
+    # `git ls-files --others | xargs rm -f` is byte-for-byte the effect of
+    # `git clean -f`, which is refused and which docs/guard-coverage.md lists as
+    # deleting untracked files permanently. Untracked files have no recovery
+    # path, so one rule refusing the act while another permits its synonym is
+    # the worst kind of inconsistency to leave in.
+    # `-o` is the short spelling of --others, and it appears in clusters.
+    if re.search(r"\bgit\b[^|]{0,60}\bls-files\b[^|]{0,60}"
+                 r"(--others|(?<![\w-])-[a-zA-Z]*o[a-zA-Z]*(?=\s|$))", cmd):
+        return ("a bulk delete of every untracked file, which is git clean -f "
+                "by another name.",
+                "delete the specific paths you meant, or use git clean -n first "
+                "to see what would go")
     return None
 
 

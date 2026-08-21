@@ -1894,7 +1894,14 @@ CMD_CASES += [
     ('find . -name "*.pyc" | xargs rm -f', FEAT, False),
     ('find . -name "*.pyc" -print0 | xargs -0 rm -f', FEAT, False),
     ('find . -name "__pycache__" -type d | xargs rm -rf', FEAT, False),
-    ('git ls-files --others --exclude-standard | xargs rm -f', FEAT, False),
+    # NOT allowed, and this case had it wrong when the rule became
+    # producer-based. A producer that enumerates UNTRACKED files makes this
+    # `git clean -f` by another name, which is refused a few lines up. Its
+    # paths are relative, so the system-root test cannot see them.
+    ('git ls-files --others --exclude-standard | xargs rm -f', FEAT, True),
+    ('git ls-files -o --exclude-standard | xargs rm -f', FEAT, True),
+    # ...while enumerating TRACKED files is ordinary work.
+    ('git ls-files | xargs wc -l', FEAT, False),
     ('ls dist | xargs -I{} rm -f dist/{}', FEAT, False),
     ('find build -type f | parallel rm -f', FEAT, False),
     # ...and the producer is what decides, so these still block.
@@ -2263,7 +2270,7 @@ CMD_CASES += [
     ('if [ -f .env.example ]; then cp .env.example .env.local.tpl; fi', FEAT, False),
     ('test -d node_modules || npm ci', FEAT, False),
     ('python3 hooks/tests.py --no-perf', FEAT, False),
-    ('python3 hooks/tests.py --no-perf', FEAT, False),
+    ('python3 tests/mutate.py', FEAT, False),
     ('grep -n "DROP TABLE" hooks/guard_rules.py', FEAT, False),
     ('rg "rm -rf" hooks/tests.py', FEAT, False),
     ('git diff hooks/guard_rules.py', FEAT, False),

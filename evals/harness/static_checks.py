@@ -9,7 +9,8 @@ from facts like "this link does not resolve".
 
 import os
 import re
-from typing import List, Sequence
+from collections import defaultdict
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .model import Finding, SkillDoc, read
 
@@ -201,6 +202,169 @@ SHINGLE = 12  # tokens
 # that two skills share a sentence, and that a file is a certain number of
 # bytes. A linter whose output is always advisory teaches you to skip its
 # output, which costs more than the checks were worth.
+# The suite's own convention for naming a sibling skill is a backticked
+# slash-name: `/ship`. Anything else (a bare /ship in prose, a path like
+# `/api/health`) is deliberately not matched, so this check has false
+# negatives rather than false positives.
+SKILL_REF_RE = re.compile(r"`/([a-z][a-z0-9-]*)`")
+ENTRY_SKILLS = {"navigate", "bootstrap", "setup", "diagnose", "review",
+                "ship", "unstick", "research", "handoff"}
+
+
+def _refs_in(text: str) -> List[str]:
+    return SKILL_REF_RE.findall(text)
+
+
+ROUTER_NAME_HINTS = ("which", "route", "router", "index")
+
+
+def find_router(skills: Sequence[SkillDoc]) -> Optional[SkillDoc]:
+    """Identify the routing skill without hardcoding its name.
+
+    The name has changed once already, so the check looks for a skill that
+    describes itself as a router first, and only falls back to known names. If
+    neither finds one, the router checks report that they could not run rather
+    than passing.
+    """
+    for s in skills:
+        if "router" in s.description.lower():
+            return s
+    for hint in ROUTER_NAME_HINTS:
+        for s in skills:
+            if s.name == hint:
+                return s
+    return None
+
+
+
+def check_skill_references(skills: Sequence[SkillDoc]) -> List[Finding]:
+    """Every `/name` handoff names a skill that exists; report the graph shape."""
+    names = {s.name for s in skills}
+    out = []  # type: List[Finding]
+    outbound = defaultdict(set)  # type: Dict[str, Set[str]]
+    inbound = defaultdict(set)  # type: Dict[str, Set[str]]
+
+    for s in skills:
+        for path in s.md_files:
+            for ref in _refs_in(read(path)):
+                if ref not in names:
+                    out.append(
+                        Finding(
+                            "skill-refs",
+                            "error",
+                            "`/%s` is referenced but no such skill exists" % ref,
+                            s.name,
+                            evidence=os.path.basename(path),
+                        )
+                    )
+                    continue
+                if ref != s.name:
+                    outbound[s.name].add(ref)
+                    inbound[ref].add(s.name)
+
+    router = find_router(skills)
+    for s in skills:
+        if not outbound[s.name]:
+            out.append(
+                Finding(
+                    "skill-refs",
+                    "info",
+                    "hands off to nothing: no `/other-skill` reference anywhere in it",
+                    s.name,
+                )
+            )
+        if router is not None and s.name == router.name:
+            continue  # the router is the entry point; nothing should point at it
+        if s.name in ENTRY_SKILLS:
+            continue
+        # Being referenced by the router does not count as being wired into
+        # the flow: the router mentions everything by construction.
+        real_inbound = inbound[s.name] - ({router.name} if router else set())
+        if not real_inbound:
+            out.append(
+                Finding(
+                    "skill-refs",
+                    "warn",
+                    "no other skill hands off to it (only the router mentions it)"
+                    if inbound[s.name]
+                    else "nothing references it at all, not even the router",
+                    s.name,
+                )
+            )
+    return out
+
+
+ORCHESTRATION_HANDOFFS = (
+    ("navigate", "prototype"),
+    ("prototype", "architect"),
+    ("to-spec", "breakdown"),
+    ("breakdown", "tdd"),
+    ("architect", "tdd"),
+)
+
+
+def check_orchestration_handoffs(skills: Sequence[SkillDoc]) -> List[Finding]:
+    """Require the canonical neighboring stages to reference each other."""
+    docs = {skill.name: skill for skill in skills}
+    out = []  # type: List[Finding]
+    for source, target in ORCHESTRATION_HANDOFFS:
+        if source not in docs or target not in docs:
+            continue  # router coverage owns missing skills
+        if target not in set(_refs_in(docs[source].body)):
+            out.append(Finding(
+                "orchestration", "error",
+                "zero-to-one loop is missing the `/%s` -> `/%s` handoff"
+                % (source, target),
+                source,
+            ))
+    return out
+
+
+def check_invocation_parity(skills: Sequence[SkillDoc]) -> List[Finding]:
+    """A skill is user-invoked in BOTH harnesses or neither.
+
+    Claude Code reads `disable-model-invocation: true` from SKILL.md. Codex
+    reads `policy.allow_implicit_invocation: false` from agents/openai.yaml.
+    They express the same decision, and nothing but this check keeps them in
+    step. Set one without the other and the two agents ship different suites:
+    the skill quietly costs its description on every turn in one harness and
+    not the other, which is the whole reason to set the flag.
+
+    Also flags a missing openai.yaml. Partial coverage is how the drift starts:
+    six of these were absent because they were the six skills not adapted from
+    upstream, which is residue rather than a decision.
+    """
+    out: List[Finding] = []
+    for s in skills:
+        claude_off = str(s.frontmatter.get("disable-model-invocation", "")).lower() == "true"
+        yaml_path = os.path.join(s.directory, "agents", "openai.yaml")
+        if not os.path.exists(yaml_path):
+            out.append(Finding(
+                "invocation", "error",
+                "no agents/openai.yaml, so Codex cannot be told how this skill is invoked",
+                s.name))
+            continue
+        with open(yaml_path, encoding="utf-8") as yaml_file:
+            text = yaml_file.read()
+        # Deliberately a substring test, not a YAML parse: the harness is
+        # stdlib-only and PyYAML is not a dependency worth adding for one key.
+        codex_off = re.search(r"allow_implicit_invocation:\s*false", text) is not None
+        if claude_off and not codex_off:
+            out.append(Finding(
+                "invocation", "error",
+                "user-invoked for Claude Code but still implicitly invocable for Codex: "
+                "add `policy.allow_implicit_invocation: false`",
+                s.name))
+        elif codex_off and not claude_off:
+            out.append(Finding(
+                "invocation", "error",
+                "user-invoked for Codex but still model-invocable for Claude Code: "
+                "add `disable-model-invocation: true`",
+                s.name))
+    return out
+
+
+
 ALL_CHECKS = (
     check_frontmatter,
     check_em_dash,

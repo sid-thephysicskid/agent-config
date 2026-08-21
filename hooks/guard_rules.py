@@ -10,7 +10,7 @@ Nothing here writes to stdout/stderr or exits: that is the adapter's job.
 
 WHAT THIS IS NOT: a security boundary. It fails open by design, and a
 determined agent can defeat it. It is a safety net for the obvious mistakes.
-Run tests.py and floor.py after any change to this file.
+Run tests.py after any change to this file, with and without --no-perf.
 
 The invariants two adversarial passes established are documented where they
 are implemented, not summarised here: a summary of seven other modules goes

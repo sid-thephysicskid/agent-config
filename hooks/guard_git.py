@@ -202,14 +202,25 @@ DRY_RUN_SUBS = ("push", "clean")
 
 
 def _is_dry_run(seg, sub):
-    """Does this invocation carry a dry-run flag that makes it a preview?"""
+    """Does this invocation carry a dry-run flag that makes it a preview?
+
+    By TOKEN POSITION, not by searching the text. A bare search matched the
+    flag inside a pathspec after `--`, inside another flag's value, and inside
+    a quoted filename, so `git clean -fd -- --dry-run` read as a preview and
+    deleted. Everything after `--` is an operand, never a flag.
+    """
     if sub not in DRY_RUN_SUBS:
         return False
-    if re.search(r"--dry-run(?![-\w])", seg):
-        return True
-    # A short cluster: -n, -nd, -xdn, -nf. The lookbehind keeps this off the
-    # second dash of a long option, so --no-verify does not read as -n.
-    return bool(re.search(r"(?<![\w-])-[a-zA-Z]*n[a-zA-Z]*(?=\s|$)", seg))
+    args = _args_after(seg, sub) or []
+    for arg in args:
+        if arg == "--":
+            return False
+        if arg == "--dry-run":
+            return True
+        # A short cluster: -n, -nd, -xdn, -nf. Not a long option, so one dash.
+        if re.fullmatch(r"-[a-zA-Z]*n[a-zA-Z]*", arg):
+            return True
+    return False
 
 
 DESTRUCTIVE_GIT = (

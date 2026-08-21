@@ -925,13 +925,20 @@ fi
 # settings.json names it. None of that survives a rule module that fails to
 # import, and that state is invisible from the outside: the hook records a
 # fail-open, exits 0, and --check still reported "Guard active" on a machine
-# that would have accepted a force push to a protected branch. Case 40 catches
-# a hook REPOINTED at a no-op script; this catches one still ours and broken.
-# Two payloads on purpose. A guard that refuses everything is also broken, and
-# only the allow case can tell the difference.
+# that would have accepted a force push to a protected branch.
+#
+# ONE PROBE PER RULE MODULE, not one probe. A single payload proved only the
+# module that answers it: neutering the git rules or the credential rules left
+# every assertion here passing and the check reporting all good. Each payload
+# below is answered by a different module, so a module that stops deciding is
+# named rather than masked by a neighbour.
+#
+# The allow case is not decoration. A guard that refuses everything is broken
+# too, and only an allow can tell the two apart.
 if (( INSTALL_GUARD && GUARD_READY )); then
   GUARD_HOOK="$CLAUDE_ROOT/hooks/guard-bash.py"
-  # Payloads are inlined into JSON, so they must contain no quote or backslash.
+  # cwd is "/" so no verdict depends on the git state of wherever this ran, and
+  # payloads are inlined into JSON, so none may contain a quote or a backslash.
   guard_verdict() {  # guard_verdict <command> -> the hook's exit status
     local rc=0
     printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"/"}' "$1" \
@@ -941,16 +948,25 @@ if (( INSTALL_GUARD && GUARD_READY )); then
   if [[ ! -f "$GUARD_HOOK" ]]; then
     err "guard-bash.py is missing, so the guard cannot be proven to decide"
   else
-    # cwd is "/" so the verdict does not depend on the git state of wherever
-    # this was run from. Both payloads are branch-independent by construction.
-    blocked="$(guard_verdict 'rm -rf /')"
+    guard_live=1
+    while IFS='|' read -r module payload; do
+      [[ -n "$module" ]] || continue
+      rc="$(guard_verdict "$payload")"
+      if [[ "$rc" != 2 ]]; then
+        err "the guard did NOT refuse '$payload' (hook exit $rc). Its $module rules are not protecting this machine."
+        guard_live=0
+      fi
+    done <<'PROBES'
+filesystem|rm -rf /
+git|git push --force origin main
+credential|cat ~/.aws/credentials
+database|psql -h db.prod.example.com
+PROBES
     allowed="$(guard_verdict 'git status')"
-    if [[ "$blocked" != 2 ]]; then
-      err "the guard did NOT refuse 'rm -rf /' (hook exit $blocked). It is wired but is not protecting this machine."
-    elif [[ "$allowed" != 0 ]]; then
+    if [[ "$allowed" != 0 ]]; then
       err "the guard refused 'git status' (hook exit $allowed). It would block ordinary work."
-    else
-      ok "guard proven live: refuses 'rm -rf /', allows 'git status'"
+    elif (( guard_live )); then
+      ok "guard proven live: refuses filesystem, git, credential and database shapes, allows 'git status'"
     fi
   fi
   # The signal already existed and nothing ever surfaced it. A non-empty log

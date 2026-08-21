@@ -24,7 +24,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from evals.harness import guard_checks, static_checks  # noqa: E402
 from evals.harness.model import load_skills, parse_frontmatter  # noqa: E402
 
-EM_DASH = chr(0x2014)
 
 
 def write_skill(root, name, frontmatter, body, extra_files=None):
@@ -234,6 +233,105 @@ class TestGuardFixtures(unittest.TestCase):
             self.assertIn(claim["branch"], self.fixtures.dirs)
             self.assertIn(claim["expect"], ("block", "allow"))
 
+
+
+class TestReferences(TempSuite):
+    def test_reference_to_missing_skill_is_an_error(self):
+        write_skill(self.root, "alpha", {"name": "alpha", "description": "d"}, "hand off to `/nowhere`")
+        findings = static_checks.check_skill_references(self.load())
+        self.assertTrue(any("no such skill exists" in f.message for f in findings))
+
+    def test_paths_are_not_mistaken_for_skill_references(self):
+        write_skill(self.root, "alpha", {"name": "alpha", "description": "d"}, "hit `/api/health` after deploy")
+        findings = static_checks.check_skill_references(self.load())
+        self.assertFalse(any("no such skill" in f.message for f in findings))
+
+    def test_router_found_by_description_not_name(self):
+        write_skill(self.root, "front-door", {"name": "front-door", "description": "Router and orientation"}, "x")
+        router = static_checks.find_router(self.load())
+        self.assertIsNotNone(router)
+        self.assertEqual(router.name, "front-door")
+
+    def _write_new_project_loop(self, missing=None):
+        edges = {
+            "navigate": ("prototype",),
+            "prototype": ("architect",),
+            "to-spec": ("breakdown",),
+            "breakdown": ("tdd",),
+            "architect": ("tdd",),
+            "tdd": (),
+        }
+        for source, targets in edges.items():
+            body = "\n".join(
+                "hand off to `/%s`" % target
+                for target in targets
+                if (source, target) != missing)
+            write_skill(
+                self.root,
+                source,
+                {"name": source, "description": "Use when %s" % source},
+                body,
+            )
+
+    def test_new_project_loop_reports_a_missing_handoff(self):
+        self._write_new_project_loop(missing=("architect", "tdd"))
+        findings = static_checks.check_orchestration_handoffs(self.load())
+        self.assertTrue(any(
+            f.skill == "architect" and "tdd" in f.message
+            for f in findings))
+
+    def test_reference_anywhere_counts(self):
+        self._write_new_project_loop(missing=("architect", "tdd"))
+        write_skill(
+            self.root,
+            "architect",
+            {"name": "architect", "description": "Use when architect"},
+            "Implementation continues with `/tdd`.",
+        )
+        self.assertEqual(
+            static_checks.check_orchestration_handoffs(self.load()), [])
+
+    def test_complete_new_project_loop_is_silent(self):
+        self._write_new_project_loop()
+        self.assertEqual(
+            static_checks.check_orchestration_handoffs(self.load()), [])
+
+
+class TestInvocationParity(TempSuite):
+    """Both directions and the clean case, because a check that only ever
+    passes is worth nothing and a check that only ever fails is worse."""
+
+    YAML_OPEN = 'interface:\n  display_name: "A"\n  short_description: "a"\n'
+    YAML_CLOSED = YAML_OPEN + "policy:\n  allow_implicit_invocation: false\n"
+
+    def _one(self, frontmatter, yaml_text):
+        extra = {"agents/openai.yaml": yaml_text} if yaml_text is not None else None
+        write_skill(self.root, "alpha", frontmatter, "x", extra_files=extra)
+        return static_checks.check_invocation_parity(self.load())
+
+    def test_claude_only_is_caught(self):
+        f = self._one(
+            {"name": "alpha", "description": "d", "disable-model-invocation": "true"},
+            self.YAML_OPEN)
+        self.assertTrue(any("still implicitly invocable for Codex" in x.message for x in f))
+
+    def test_codex_only_is_caught(self):
+        f = self._one({"name": "alpha", "description": "d"}, self.YAML_CLOSED)
+        self.assertTrue(any("still model-invocable for Claude Code" in x.message for x in f))
+
+    def test_missing_yaml_is_caught(self):
+        f = self._one({"name": "alpha", "description": "d"}, None)
+        self.assertTrue(any("no agents/openai.yaml" in x.message for x in f))
+
+    def test_both_user_invoked_is_silent(self):
+        f = self._one(
+            {"name": "alpha", "description": "d", "disable-model-invocation": "true"},
+            self.YAML_CLOSED)
+        self.assertEqual(f, [])
+
+    def test_both_model_invocable_is_silent(self):
+        f = self._one({"name": "alpha", "description": "d"}, self.YAML_OPEN)
+        self.assertEqual(f, [])
 
 
 if __name__ == "__main__":

@@ -22,11 +22,12 @@ Warnings and informational findings use thresholds documented in
 
 The checks cover:
 
-- skill metadata, descriptions, size, and invocation parity;
-- unresolved references, missing paths, and duplicate passages;
-- trigger collisions and orchestration handoffs;
-- skill-prescribed commands that conflict with the live guard;
-- README guard claims pinned to executable examples.
+- skill metadata and descriptions, and invocation parity with the Codex file;
+- unresolved skill references, broken links, and missing referenced paths;
+- handoffs between the stages that are meant to reference each other;
+- the em dash, which the house style bans outright;
+- skill-prescribed commands run past the live guard;
+- stated guard behaviours pinned to the sentence that claims them.
 
 `tests/audit.py` separately checks links and publishability across every
 tracked file. The static evaluator limits its file checks to packaged skill

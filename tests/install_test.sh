@@ -1131,7 +1131,11 @@ chk "and the check passes" "$rc" "0"
 cp "$S/repo/hooks/guard_parse.py" "$S/guard_parse.orig"
 printf '\nbroken(\n' >> "$S/repo/hooks/guard_parse.py"
 out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"; rc=$?
-chk "a wired but dead guard is caught" "$(grep -c 'did NOT refuse' <<<"$out")" "1"
+# A broken PARSER breaks every module, so every probe reports. That is the
+# point: one probe per rule module, so a single dead module is named rather
+# than masked by a neighbour that still answers.
+chk "a wired but dead guard is caught" "$([ "$(grep -c 'did NOT refuse' <<<"$out")" -ge 1 ] && echo yes || echo no)" "yes"
+chk "and it names which rules" "$([ "$(grep -c 'rules are not protecting' <<<"$out")" -ge 1 ] && echo yes || echo no)" "yes"
 chk "and the check fails" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
 chk "and the fail-open log is surfaced" "$(grep -c 'guard-failopen.log is not empty' <<<"$out")" "1"
 cp "$S/guard_parse.orig" "$S/repo/hooks/guard_parse.py"

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Release metadata and native plugin surfaces stay synchronized."""
 import json
-import filecmp
 import os
 import shutil
 import subprocess
@@ -12,22 +11,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class ReleaseMetadataTest(unittest.TestCase):
-    def assert_tree_equal(self, left, right):
-        def files(root):
-            found = []
-            for current, dirs, names in os.walk(root):
-                dirs[:] = [name for name in dirs if name != "__pycache__"]
-                for name in names:
-                    if not name.endswith(".pyc"):
-                        found.append(os.path.relpath(os.path.join(current, name), root))
-            return sorted(found)
-
-        self.assertEqual(files(left), files(right))
-        for relative in files(left):
-            self.assertTrue(filecmp.cmp(os.path.join(left, relative),
-                                       os.path.join(right, relative), shallow=False),
-                            relative)
-
     def test_versions_match(self):
         with open(os.path.join(ROOT, "VERSION")) as fh:
             version = fh.read().strip()
