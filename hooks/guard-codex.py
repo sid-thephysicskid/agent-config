@@ -73,26 +73,15 @@ def debug_log(raw):
         pass
 
 
-def dig(d, *paths):
-    """The first non-empty value at any of the given key paths.
+def dig(d, *paths, first=True):
+    """Values at the given key paths, walking each one tolerantly.
+
+    `first=True` returns the first non-empty value; `first=False` returns every
+    one, flattened. This was two functions with the same walk written twice.
 
     Tolerant of the wrong shape at every hop: a payload whose `tool_input` is a
     string rather than an object used to raise here, outside any try.
     """
-    for path in paths:
-        cur = d
-        for key in path:
-            if not isinstance(cur, dict):
-                cur = None
-                break
-            cur = cur.get(key)
-        if cur:
-            return cur
-    return None
-
-
-def dig_all(d, *paths):
-    """Every non-empty value at the supplied key paths."""
     found = []
     for path in paths:
         cur = d
@@ -102,8 +91,10 @@ def dig_all(d, *paths):
                 break
             cur = cur.get(key)
         if cur:
+            if first:
+                return cur
             found.extend(cur if isinstance(cur, list) else [cur])
-    return found
+    return None if first else found
 
 
 def patch_paths(text):
@@ -132,7 +123,7 @@ def main():
             cwd = "\0unresolvable-cwd"
 
     cmd = dig(payload, *CMD_KEYS)
-    paths = dig_all(payload, *PATH_KEYS)
+    paths = dig(payload, *PATH_KEYS, first=False)
     raw_input = dig(payload, ("tool_input",), ("toolInput",), ("input",))
 
     # Codex apply_patch is a free-form tool: tool_input is the patch string,

@@ -53,6 +53,15 @@ def deep_raw(n):
 
 CASES = [
     # (label, adapter, payload, raw, expected exit)
+    # These three came from a second, smaller adapter check that lived in
+    # hooks/tests.py and spawned its own subprocesses. Everything else it
+    # covered was already here.
+    ("argv-form command blocks", BASH, {"tool_name": "Bash",
+                                        "tool_input": {"command": ["rm", "-rf", "/"]}}, None, 2),
+    ("codex shell tool blocks", CODEX, {"tool_name": "shell",
+                                       "tool_input": {"command": BAD}}, None, 2),
+    ("empty tool_input fails open", BASH, {"tool_name": "Bash",
+                                           "tool_input": {}}, None, 0),
     ("baseline block", BASH, {"tool_name": "Bash",
                               "tool_input": {"command": BAD}}, None, 2),
     ("baseline allow", BASH, {"tool_name": "Bash",

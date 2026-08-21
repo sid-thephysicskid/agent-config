@@ -2,7 +2,9 @@
   "_about": [
     "A small contract between prose and executable guard behavior.",
     "Each quote must exist in the cited file and each command is evaluated",
-    "against the live rule engine. Detailed coverage belongs in floor.py."
+    "against the live rule engine. Detailed coverage belongs in hooks/cases.py.",
+    "$BRANCH in a command is replaced with the fixture's actual branch, so a",
+    "claim does not break when a fixture is renamed."
   ],
   "claims": [
     {
@@ -32,7 +34,7 @@
       "skill": "guard",
       "file": "AGENTS.md",
       "quote": "git push --force-with-lease=<branch>:<sha>",
-      "command": "git push --force-with-lease=fix/eval-fixture:0123456789abcdef0123456789abcdef01234567",
+      "command": "git push --force-with-lease=$BRANCH:0123456789abcdef0123456789abcdef01234567",
       "branch": "feature",
       "expect": "allow",
       "kind": "claim",

@@ -19,7 +19,6 @@ from cases import CMD_CASES, PATH_CASES  # noqa: E402
 from fixtures import FEAT, MAIN  # noqa: E402
 
 
-ADAPTER_COUNT = 5
 
 
 # Rule tables whose rows are (pattern, reason, fix). The reason is already a
@@ -234,37 +233,6 @@ def test_git_call_budget():
     return fails
 
 
-def test_adapters():
-    """Adapter-level payload shapes. The rules module can be correct while an
-    adapter silently fails open on a shape it does not recognise."""
-    import json as _json
-    here = os.path.dirname(os.path.abspath(__file__))
-    out = []
-
-    def run(hook, payload):
-        r = subprocess.run(["python3", os.path.join(here, hook)],
-                           input=_json.dumps(payload), capture_output=True, text=True)
-        return r.returncode == 2
-
-    if not run("guard-bash.py", {"tool_name": "Bash",
-               "tool_input": {"command": ["rm", "-rf", "/"]}, "cwd": MAIN}):
-        out.append("  guard-bash: list-form command not blocked")
-    if not run("guard-codex.py", {"tool_name": "shell",
-               "tool_input": {"command": "rm -rf /"}, "cwd": MAIN}):
-        out.append("  guard-codex: shell tool not blocked")
-    if not run("guard-codex.py", {"tool_name": "read",
-               "tool_input": {"path": ["/app/.env"]}}):
-        out.append("  guard-codex: list-form path not blocked")
-    if not run("guard-files.py", {"tool_name": "Read",
-               "tool_input": {"file_path": ["/app/.env"]}}):
-        out.append("  guard-files: list-form file_path not blocked")
-    if run("guard-bash.py", {"tool_name": "Bash", "tool_input": {}, "cwd": MAIN}):
-        out.append("  guard-bash: empty tool_input should fail open, not block")
-    return out
-
-
-
-
 def _worst(shapes):
     """Seconds taken by the slowest of these commands.
 
@@ -389,7 +357,6 @@ def main():
         if got != should:
             fails.append(f"  {'should BLOCK' if should else 'should ALLOW'}: path {path}")
 
-    fails += test_adapters()
     fails += test_git_call_budget()
     for name in test_every_db_wipe_rule_is_reachable():
         fails.append(f"  DB_WIPE_RULES row {name!r} is unreachable: no command fires it")
@@ -422,7 +389,7 @@ def main():
     # failures without contributing to the total, so `PASS n/n` was a number
     # this suite had made up. A suite that miscounts itself has no business
     # grading anything else.
-    total = (len(CMD_CASES) + len(PATH_CASES) + ADAPTER_COUNT
+    total = (len(CMD_CASES) + len(PATH_CASES)
              + len(guard_rules.DB_WIPE_RULES) + len(guard_rules.SEGMENT_RULES)
              + 2 * len(guard_parse.RUNNER_NAMES) + len(OVERSIZE_PROBES)
              + (PERF_ASSERTIONS if perf else 0))
