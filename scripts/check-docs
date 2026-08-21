@@ -55,4 +55,18 @@ if ! python3 scripts/guard-coverage --check; then
   fail=1
 fi
 
+# The global instructions the installer links are what an agent actually loads.
+# They shipped carrying the skill routing and NONE of the safety rules, so every
+# install produced hooks that block with no written policy behind them, and the
+# rules that still apply when the hooks are absent were absent too. One source:
+# the section in the template must be the section in AGENTS.md, verbatim.
+if ! python3 -c 'import io,sys
+b=io.open("AGENTS.md",encoding="utf-8").read()
+t=io.open("templates/AGENTS.global.md",encoding="utf-8").read()
+s=b[b.index("## Safety guardrails"):b.index("## Working method")].rstrip()
+sys.exit(0 if s in t else 1)'; then
+  echo "templates/AGENTS.global.md is missing AGENTS.md's safety section, or has a stale copy"
+  fail=1
+fi
+
 exit $fail
