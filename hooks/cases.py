@@ -2263,7 +2263,7 @@ CMD_CASES += [
     ('if [ -f .env.example ]; then cp .env.example .env.local.tpl; fi', FEAT, False),
     ('test -d node_modules || npm ci', FEAT, False),
     ('python3 hooks/tests.py --no-perf', FEAT, False),
-    ('python3 hooks/floor.py', FEAT, False),
+    ('python3 hooks/tests.py --no-perf', FEAT, False),
     ('grep -n "DROP TABLE" hooks/guard_rules.py', FEAT, False),
     ('rg "rm -rf" hooks/tests.py', FEAT, False),
     ('git diff hooks/guard_rules.py', FEAT, False),

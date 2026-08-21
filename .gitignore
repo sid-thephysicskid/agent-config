@@ -9,4 +9,3 @@ AGENTS.local.md
 .claude/worktrees/
 
 # Example output from the plugin release builder.
-/dist-plugins/

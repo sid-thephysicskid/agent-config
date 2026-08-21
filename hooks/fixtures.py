@@ -17,7 +17,7 @@ HOME = os.path.expanduser("~")
 # `git commit` run somebody's hook, commit.gpgsign can make it fail outright,
 # and init.defaultBranch changes the branch a case is judged on. The verdict
 # then depends on whose machine ran the suite, which is the whole class of bug
-# scripts/sandbox exists to catch.
+# `scripts/gates --hermetic` exists to catch.
 ENV = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull,
            GIT_CONFIG_SYSTEM=os.devnull, GIT_CONFIG_NOSYSTEM="1")
 
