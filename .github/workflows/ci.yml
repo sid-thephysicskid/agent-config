@@ -65,11 +65,10 @@ jobs:
       - name: project agent initializer
         run: python3 tests/test_agent_init.py
 
-      # These three ran only in scripts/ci-local, so they gated a release but
-      # never a pull request. test_onboarding.py is the only coverage of the
-      # README's "Existing setups" section through the npx path, and
-      # check-docs is the only thing that keeps the README and the packaged
-      # skills agreeing. Fourteen seconds for all three.
+      # These three gated a release but never a pull request.
+      # test_onboarding.py is the only coverage of the README's "Existing
+      # setups" section through the npx path, and check-docs is the only
+      # thing keeping the README and the packaged skills in agreement.
       - name: onboarding through the npx path
         run: python3 tests/test_onboarding.py
 
@@ -114,7 +113,7 @@ jobs:
   # Linux only. macOS runners bill at 10x and this suite takes ~16 minutes
   # there, so it cost ~165 of the 2000 free monthly minutes on every push:
   # about eleven pushes a month. It is also the platform least worth paying
-  # for here, because development happens on macOS, so `./scripts/ci-local`
+  # for here, because development happens on macOS, so `./scripts/gates`
   # already exercises every BSD-tool and case-insensitive-filesystem path on
   # a real Mac before anything is pushed. Linux is the one nobody would
   # otherwise test.

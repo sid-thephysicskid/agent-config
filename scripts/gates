@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Every gate, in one list, run locally.
+#
+#   ./scripts/gates              the fast gates
+#   ./scripts/gates --full       and the installer suite, which is slow
+#   ./scripts/gates --hermetic   with nothing inherited from this machine
+#
+# One list, because there used to be two drivers with two hand-kept copies of
+# it and they had already drifted: one ran the credential-pattern test and the
+# other did not, one ran check-docs and the other did not. A gate that only one
+# list knows about is a gate that does not run.
+#
+# --hermetic uses `env -i` and a throwaway HOME. Several rules consult $HOME,
+# and a developer box also has an INSTALLED guard whose hooks may point at a
+# different checkout, so a verdict can depend on the host. This turns that
+# dependence into a failure instead of a false green. It skips the gates that
+# need a node toolchain, which is not on the minimal PATH.
+#
+# Not a replacement for hosted CI: it cannot give you a clean Linux box or a
+# second Python version. It IS the only gate that runs on macOS, because the
+# hosted matrix does not.
+set -uo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
+
+FULL=0; HERMETIC=0
+for arg in "$@"; do
+  case "$arg" in
+    --full) FULL=1 ;;
+    --hermetic) HERMETIC=1 ;;
+    *) printf 'usage: gates [--full] [--hermetic]\n' >&2; exit 2 ;;
+  esac
+done
+
+SANDBOX=""
+if (( HERMETIC )); then
+  SANDBOX="$(mktemp -d)"
+  trap 'rm -rf "$SANDBOX"' EXIT
+  mkdir -p "$SANDBOX/home" "$SANDBOX/tmp"
+  echo "hermetic HOME=$SANDBOX/home"
+fi
+
+# name | needs node | command
+GATES=(
+  "rule suite|no|python3 hooks/tests.py --no-perf"
+  "floor suite|no|python3 hooks/floor.py"
+  "adapters|no|python3 tests/adapters.py"
+  "red team|no|python3 evals/redteam.py evals/redteam-candidates.txt"
+  "skills evals|no|python3 evals/run_evals.py"
+  "eval harness|no|python3 evals/test_harness.py"
+  "settings merge|no|python3 tests/test_install_settings.py"
+  "codex hooks|no|python3 tests/test_install_codex_hooks.py"
+  "install helpers|no|python3 tests/test_install_helpers.py"
+  "agent init|no|python3 tests/test_agent_init.py"
+  "wizard|no|python3 operator-skills/wizard/tests/test_wizard.py"
+  "credential patterns|no|python3 tests/test_audit_patterns.py"
+  "audit|no|python3 tests/audit.py"
+  "docs match code|no|./scripts/check-docs"
+  "python syntax|no|python3 -W error::SyntaxWarning -m compileall -q hooks/ evals/ operator-skills/ scripts/ tests/"
+  "DoS budgets|no|python3 hooks/tests.py"
+  "release metadata|yes|python3 tests/test_release_metadata.py"
+  "npm CLI|yes|python3 tests/test_npx_cli.py"
+  "onboarding|yes|python3 tests/test_onboarding.py"
+)
+
+pass=0; fail=0; skipped=0
+run() {
+  local name="$1"; shift
+  local out
+  local rc=0
+  if (( HERMETIC )); then
+    out=$(env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME="$SANDBOX/home" \
+              TMPDIR="$SANDBOX/tmp" PYTHONDONTWRITEBYTECODE=1 LC_ALL=C.UTF-8 \
+              "$@" 2>&1) || rc=$?
+  else
+    out=$("$@" 2>&1) || rc=$?
+  fi
+  if (( rc == 0 )); then
+    printf '  \033[32m✓\033[0m %-22s %s\n' "$name" "$(tail -1 <<<"$out")"
+    pass=$((pass+1))
+  else
+    printf '  \033[31m✗\033[0m %-22s\n' "$name"
+    sed 's/^/      /' <<<"$out" | tail -15
+    fail=$((fail+1))
+  fi
+}
+
+for entry in "${GATES[@]}"; do
+  IFS='|' read -r name needs_node cmd <<<"$entry"
+  if (( HERMETIC )) && [[ "$needs_node" == yes ]]; then
+    printf '  \033[2m-\033[0m %-22s needs node, skipped in hermetic mode\n' "$name"
+    skipped=$((skipped+1))
+    continue
+  fi
+  # shellcheck disable=SC2086
+  run "$name" $cmd
+done
+
+if (( FULL )); then
+  run "installer suite" bash tests/install_test.sh
+else
+  printf '  \033[2m-\033[0m %-22s slow, pass --full\n' "installer suite"
+  skipped=$((skipped+1))
+fi
+
+echo
+if (( fail )); then
+  printf '\033[31mFAIL\033[0m  %d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skipped"
+  exit 1
+fi
+printf '\033[32mPASS\033[0m  %d gates, 0 failed, %d skipped\n' "$pass" "$skipped"

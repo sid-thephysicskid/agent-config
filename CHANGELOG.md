@@ -61,8 +61,10 @@ Installer:
 
 - `docs/guard-coverage.md`, generated from the rules, with the threat model and
   the accepted gaps. `SECURITY.md` defines a reportable bypass against it.
-- `scripts/sandbox` and `tests/Dockerfile`, to run the gates with nothing
-  inherited from the developer's machine.
+- `scripts/gates`, one list of every gate, with `--hermetic` to run them
+  with nothing inherited from the developer's machine. It replaces two
+  drivers that kept two hand-maintained copies of the list and had already
+  drifted apart.
 
 ### Changed
 

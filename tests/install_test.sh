@@ -18,8 +18,8 @@ chk "workflow is not installed by default" "$([ -e "$H/.claude/skills/ship" ] &&
 chk "settings has hook" "$(grep -c guard-bash "$H/.claude/settings.json")" "1"
 
 echo "== 1b. release CI gates both guard suites once =="
-chk "rule suite is a release gate" "$(grep -c 'hooks/tests.py --no-perf' "$S/repo/scripts/ci-local")" "1"
-chk "floor suite is a release gate" "$(grep -c 'hooks/floor.py' "$S/repo/scripts/ci-local")" "1"
+chk "rule suite is a release gate" "$(grep -c 'hooks/tests.py --no-perf' "$S/repo/scripts/gates")" "1"
+chk "floor suite is a release gate" "$(grep -c 'hooks/floor.py' "$S/repo/scripts/gates")" "1"
 
 echo "== 2. existing instructions and unrelated skills are preserved =="
 H="$S/h2"; mkdir -p "$H/.claude/skills/my-own-skill"

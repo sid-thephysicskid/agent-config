@@ -46,7 +46,7 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertIn("registry-url: https://registry.npmjs.org", workflow)
         self.assertIn("GITHUB_REF_NAME", workflow)
         self.assertIn('require("./package.json").version', workflow)
-        self.assertIn("./scripts/ci-local --full", workflow)
+        self.assertIn("./scripts/gates --full", workflow)
         self.assertIn("npm publish", workflow)
         self.assertIn("NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}", workflow)
         self.assertIn("Remove the secret", workflow)

@@ -16,4 +16,4 @@ WORKDIR /repo
 COPY . .
 RUN useradd -m runner && chown -R runner /repo
 USER runner
-CMD ["bash", "scripts/sandbox"]
+CMD ["bash", "scripts/gates", "--hermetic", "--full"]
