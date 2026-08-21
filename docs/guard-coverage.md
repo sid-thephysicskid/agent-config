@@ -113,8 +113,8 @@ argument. Read them before reporting a bypass.
 
 | Measure | Count |
 |---|---|
-| Commands refused | 849 |
-| Ordinary commands allowed | 692 |
+| Commands refused | 859 |
+| Ordinary commands allowed | 702 |
 | Path cases | 32 |
 | Red-team candidates leaking untriaged | 0, or CI fails |
 <!-- END GENERATED -->

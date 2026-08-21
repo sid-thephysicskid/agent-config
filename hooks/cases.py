@@ -2388,6 +2388,50 @@ CMD_CASES += [
     ("echo 'npm test' > c.sh; bash ./c.sh", FEAT, False),
 ]
 
+CMD_CASES += [
+    # ---- round 20: friction an adoption review found ----
+    # THE WORST KIND OF BLOCK: one whose own fix line does not unblock you.
+    # The sanctioned rewrite required the lease to be the ONLY argument, so a
+    # user who followed the message and appended `origin <branch>` from muscle
+    # memory got the identical refusal. /ship step 7 teaches that exact form.
+    ("git push --force-with-lease=feature/x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FEAT, False),
+    ("git push --force-with-lease=feature/x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa origin feature/x", FEAT, False),
+    ("git push origin feature/x --force-with-lease=feature/x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FEAT, False),
+    # ...and the protection is unchanged: unpinned, or aimed elsewhere.
+    ("git push --force-with-lease origin feature/x", FEAT, True),
+    ("git push --force-with-lease=main:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa origin main", MAIN, True),
+    ("git push --force-with-lease=feature/x:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa origin other", FEAT, True),
+
+    # These tools deploy to production BY DEFAULT, which is why the bare verb
+    # is refused. The flag that says otherwise was ignored, so the safe
+    # spelling was refused alongside the dangerous one.
+    ("wrangler deploy --env staging", FEAT, False),
+    ("fly deploy --config staging.toml", FEAT, False),
+    ("serverless deploy --stage dev", FEAT, False),
+    ("wrangler deploy", FEAT, True),
+    ("fly deploy", FEAT, True),
+    ("wrangler deploy --env production", FEAT, True),
+
+    # A quoted literal inside an inline PROGRAM is data, the same as a commit
+    # message. Printing the name of a dangerous command was refused while
+    # echoing it was allowed, so writing a test or a runbook about these tools
+    # was blocked, including by CONTRIBUTING.md's own instructions.
+    ("python3 -c \"print('kubectl delete namespace test')\"", FEAT, False),
+    ("python3 -c \"print('npm publish')\"", FEAT, False),
+    ("node -e \"console.log('gh repo delete a/b')\"", FEAT, False),
+    # THE TRAP that scopes it: a program that hands the string to a shell is
+    # RUNNING it, and stripping the literal there would hide the payload.
+    ("python3 -c \"import os; os.system('kubectl delete namespace test')\"", FEAT, True),
+    ("python3 -c \"import subprocess; subprocess.run('npm publish', shell=True)\"", FEAT, True),
+    ("node -e \"require('child_process').execSync('npm publish')\"", FEAT, True),
+
+    # DECIDED, and staying blocked: bulk deletes under /var/log destroy audit
+    # trails, and the guard already names the fix, because narrowing the root
+    # to /var/log/<app> is allowed and so is deleting that directory outright.
+    ("find /var/log -name '*.gz' | xargs rm -f", FEAT, True),
+    ("find /var/log/myapp -name '*.gz' -delete", FEAT, False),
+]
+
 PATH_CASES += [
     ("/a/.environment", False, False),
     ("/a/src/.environment.ts", False, False),

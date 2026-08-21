@@ -144,7 +144,15 @@ SEGMENT_RULES = (
     ("prod-db", lambda seg, inv: check_prod_db(inv.raw, stripped=inv.stripped)),
     ("db-wipe", lambda seg, inv: check_db_wipe(inv.raw, stripped=inv.stripped)),
     ("rm", lambda seg, inv: check_rm(seg)),
-    ("tools", lambda seg, inv: check_tools(seg)),
+    # A quoted literal inside an inline PROGRAM is data, the same way a
+    # commit message is. Without stripping them, printing the name of a
+    # dangerous command from python was refused while echoing it was not,
+    # so writing a test or a runbook about these tools was blocked.
+    # Actually RUNNING one from a program is caught by inline-code below.
+    ("tools", lambda seg, inv: check_tools(
+        strip_quoted(seg)
+        if inline_code(inv.unwrapped) and not PROGRAM_EXECUTES.search(seg)
+        else seg)),
     ("inline-code", lambda seg, inv: check_inline_code(inv.unwrapped)),
 )
 

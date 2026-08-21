@@ -353,7 +353,19 @@ PRODUCTION_DEPLOYS = (
 )
 
 
+# `--env staging`, `--stage dev`, `--config staging.toml`. These tools deploy
+# to production BY DEFAULT, which is why they are refused unqualified, but the
+# flag that says otherwise was ignored, so the safe spelling was refused
+# alongside the dangerous one. Anything naming prod/production/live is not
+# exempt, so `--env production` still blocks.
+NON_PRODUCTION = re.compile(
+    r"--(env|environment|stage|config|profile)[=\s]+(?!\S*(prod|production|live))\S+",
+    re.I)
+
+
 def check_deploy(seg):
+    if NON_PRODUCTION.search(seg):
+        return None
     for pat, what in PRODUCTION_DEPLOYS:
         if re.search(pat, seg, re.I):
             return (what + ", which skips CI, review and branch protection.", _DEPLOY_FIX)
