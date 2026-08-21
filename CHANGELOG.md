@@ -14,7 +14,8 @@ Verification that claimed more than it established:
 - `doctor` and `--check` prove the guard still decides, instead of only proving
   it is wired. A rule module that no longer imports leaves every symlink and
   settings entry intact, so the check reported "Guard active" on a machine that
-  would have accepted a force push.
+  would have accepted a force push. One probe per rule module, so a single dead
+  module is named rather than masked by a neighbour that still answers.
 - `doctor` and `--check` surface a non-empty `~/.claude/guard-failopen.log`. The
   guard had recorded every fail-open since it was written and nothing read it.
 - The workflow banner counts what is linked instead of printing `13/13`. A
@@ -52,6 +53,20 @@ Guardrails that refused ordinary work:
 
 Guardrails that missed:
 
+- An in-place edit is a write. The unmake list named rm, mv, cp, tee, chmod and
+  ln, so the guard could not protect its own configuration from the one verb an
+  agent is most likely to reach for when editing a file from a shell.
+- Credentials an agent meets inside a container. The credential directory list
+  was the dot-directories in a home, so the Docker and Compose secrets mount
+  and the Kubernetes service-account token were all readable.
+- A client certificate's private half. The flag naming the certificate blocked;
+  the flag naming the key did not.
+- A script written under a bare name and run with a leading `./` did not join
+  up as write-then-run, while the same two segments with matching spellings did.
+- A bulk delete of every untracked file, which is the forced clean this guard
+  refuses, reached by a different spelling.
+- A dry-run flag counted from anywhere in the line, including inside a pathspec
+  after `--`, so a forced clean could read as a preview and delete.
 - A flag between a wrapper and the binary no longer disables rules anchored on
   the head of the command. Eleven shapes went through, including production
   database connections and inline programs deleting system paths.
