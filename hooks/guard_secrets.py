@@ -88,7 +88,17 @@ PUBLIC_CERT = re.compile(
 # them is a read whatever the rest of the name looks like, which is what
 # `cat ~/.aws/*` and `cat ~/.aws/cred*` need: the glob truncates the filename,
 # so no list of filenames can ever match them.
-SECRET_DIR = re.compile(r"(^|/)\.(ssh|aws|kube|docker|gnupg)/", re.I)
+# The dot-directories in a home, plus the mounts a container gets its
+# secrets through. Only the first group was here, so every credential an
+# agent meets while running inside a container was readable: /run/secrets
+# is where Docker and Compose put them and where Kubernetes mounts a
+# service-account token.
+SECRET_DIR = re.compile(
+    r"(^|/)\.(ssh|aws|kube|docker|gnupg)/"
+    # With or without the trailing slash: naming the directory is how a
+    # recursive read reaches everything inside it. `ls` stays exempt via
+    # METADATA_ONLY, because listing names discloses nothing.
+    r"|^(/var)?/run/secrets(/|$)", re.I)
 
 # Inside a credential directory but not credentials. READ-safe only: writing
 # an ssh config installs a ProxyCommand, which runs on the next connection.

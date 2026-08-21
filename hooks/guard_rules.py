@@ -193,6 +193,10 @@ def _written_then_run(segs, cwd):
         if body.strip():
             written[target] = body
             written[os.path.basename(target)] = body
+            # ...and the `./name` spelling. Writing `c.sh` then running
+            # `bash ./c.sh` is the same two segments, and it did not join up,
+            # while `> ./c.sh` then `bash ./c.sh` did.
+            written["./" + os.path.basename(target)] = body
     if not written:
         return None
     for s in segs:
