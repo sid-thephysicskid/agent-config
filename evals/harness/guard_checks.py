@@ -11,7 +11,7 @@ the interesting rules are branch-conditional and one of them is conditional on
 the repo having no history at all:
 
     protected  on `main`, one commit
-    feature    on `fix/eval-fixture`, one commit
+    feature    on a non-protected branch, one commit
     virgin     on `main`, no commits (what /bootstrap's first commit sees)
 
 The fixtures are throwaway and are removed at the end.
@@ -20,10 +20,8 @@ The fixtures are throwaway and are removed at the end.
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .model import EVALS_DIR, REPO_ROOT, Finding, SkillDoc, iter_fences, read
@@ -54,60 +52,35 @@ def _load_guard():
     return guard_rules
 
 
-FIXTURE_SPECS = (
-    ("protected", "main", True),
-    ("feature", "fix/eval-fixture", True),
-    ("virgin", "main", False),
-)
-
-
 class Fixtures(object):
-    """Throwaway git repos standing in for the states the skills run in."""
+    """The three repository states the skills are judged in.
+
+    Built by hooks/fixtures.py, the same module the guard's own suite uses.
+    There were two builders for this, with different branch names and
+    different environment scrubbing, and only one of them isolated the
+    developer's git config. Two answers to one question is how they drift.
+
+    Cleanup is fixtures.py's own atexit hook, so there is nothing to do here.
+    """
 
     def __init__(self) -> None:
         self.dirs = {}  # type: Dict[str, str]
         self.error = None  # type: Optional[str]
 
     def build(self) -> None:
-        env = dict(os.environ)
-        env.update(
-            {
-                "GIT_AUTHOR_NAME": "eval",
-                "GIT_AUTHOR_EMAIL": "eval@example.invalid",
-                "GIT_COMMITTER_NAME": "eval",
-                "GIT_COMMITTER_EMAIL": "eval@example.invalid",
-                "GIT_CONFIG_GLOBAL": os.devnull,
-                "GIT_CONFIG_SYSTEM": os.devnull,
-            }
-        )
-        for label, branch, with_commit in FIXTURE_SPECS:
-            try:
-                d = tempfile.mkdtemp(prefix="skill-eval-")
-                subprocess.run(
-                    ["git", "init", "-q", "-b", branch, d],
-                    check=True,
-                    env=env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                )
-                if with_commit:
-                    with open(os.path.join(d, "placeholder.txt"), "w") as fh:
-                        fh.write("fixture\n")
-                    subprocess.run(["git", "-C", d, "add", "placeholder.txt"], check=True, env=env)
-                    subprocess.run(
-                        ["git", "-C", d, "commit", "-q", "-m", "fixture"],
-                        check=True,
-                        env=env,
-                        stdout=subprocess.DEVNULL,
-                    )
-                self.dirs[label] = d
-            except (OSError, subprocess.CalledProcessError) as exc:
-                self.error = str(exc)
-                return
+        if HOOKS_DIR not in sys.path:
+            sys.path.insert(0, HOOKS_DIR)
+        try:
+            import fixtures
+        except Exception as exc:  # noqa: BLE001  git missing, or unusable
+            self.error = str(exc)
+            return
+        self.dirs = {"protected": fixtures.MAIN,
+                     "feature": fixtures.FEAT,
+                     "virgin": fixtures.VIRGIN}
 
     def cleanup(self) -> None:
-        for d in self.dirs.values():
-            shutil.rmtree(d, ignore_errors=True)
+        pass
 
 
 def extract_commands(skill: SkillDoc) -> Tuple[List[Tuple[int, str]], int]:
@@ -178,7 +151,11 @@ def check_prescribed_commands(skills: Sequence[SkillDoc], fixtures: Fixtures) ->
         return [
             Finding(
                 "guard-prescribed",
-                "warn",
+                # ERROR, not warn. A warn does not fail the run, so a
+                # machine with no git reported success while verifying
+                # nothing, and the summary printed the counts it had
+                # not measured. A harness that cannot run is not a pass.
+                "error",
                 "could not build git fixtures, guard checks did not run: %s" % fixtures.error,
             )
         ]
@@ -213,6 +190,13 @@ def load_claims(path: Optional[str] = None) -> List[dict]:
         return json.load(fh)["claims"]
 
 
+def _branch_of(cwd: str) -> str:
+    """The branch a fixture is on, asked rather than assumed."""
+    r = subprocess.run(["git", "-C", cwd, "branch", "--show-current"],
+                       capture_output=True, text=True)
+    return r.stdout.strip()
+
+
 def check_guard_claims(fixtures: Fixtures, claims: Optional[List[dict]] = None) -> List[Finding]:
     """Verify the statements the skills make about what the guard does.
 
@@ -228,7 +212,11 @@ def check_guard_claims(fixtures: Fixtures, claims: Optional[List[dict]] = None) 
         return [
             Finding(
                 "guard-claims",
-                "warn",
+                # ERROR, not warn. A warn does not fail the run, so a
+                # machine with no git reported success while verifying
+                # nothing, and the summary printed the counts it had
+                # not measured. A harness that cannot run is not a pass.
+                "error",
                 "could not build git fixtures, claim checks did not run: %s" % fixtures.error,
             )
         ]
@@ -256,7 +244,11 @@ def check_guard_claims(fixtures: Fixtures, claims: Optional[List[dict]] = None) 
             )
             continue
         cwd = fixtures.dirs[claim["branch"]]
-        verdict = guard.check_command(claim["command"], cwd)
+        # $BRANCH means the fixture's actual branch. The lease claim used to
+        # name it literally, so renaming a fixture broke a claim about a rule
+        # that had not changed.
+        command = claim["command"].replace("$BRANCH", _branch_of(cwd))
+        verdict = guard.check_command(command, cwd)
         actual = "block" if verdict is not None else "allow"
         if actual != claim["expect"]:
             out.append(
@@ -264,7 +256,7 @@ def check_guard_claims(fixtures: Fixtures, claims: Optional[List[dict]] = None) 
                     "guard-claims",
                     "error",
                     "claim %s says the guard would %s %r on a %s branch; it %ss it"
-                    % (claim["id"], claim["expect"], claim["command"], claim["branch"], actual),
+                    % (claim["id"], claim["expect"], command, claim["branch"], actual),
                     skill,
                     evidence=claim.get("why", ""),
                 )

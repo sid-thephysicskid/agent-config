@@ -1,7 +1,0 @@
-Finance cannot close the July books. The month-end reconciliation in the
-billing service has come out short three months running, always in the same
-direction: 5p in June, 2p in July. They have checked their side twice and say
-it is not them.
-
-Work out what is actually causing it, and land the fix in the repo so the
-reconciliation comes out clean.

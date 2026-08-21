@@ -38,7 +38,7 @@ _apply_seen=0
 _bad_arg() {
   printf '\n  \033[31mABORTED:\033[0m %s\n' "$1" >&2
   printf '  There is no preview mode: this script always uninstalls.\n' >&2
-  printf '  Usage: ./uninstall.sh [guard|workflow|operator|full] [--apply]\n\n' >&2
+  printf '  Usage: ./uninstall.sh [guard|workflow|operator|full]   (removes; --apply is accepted and ignored)\n\n' >&2
   exit 1
 }
 for _arg in "$@"; do

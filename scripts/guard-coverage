@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Fill the generated block in docs/guard-coverage.md from the rules.
+
+SECURITY.md defines a reportable bypass as a command the coverage list says is
+refused. That list did not exist, so the criterion pointed at nothing. A
+hand-written one would rot the same way, so the enumerable half is derived here
+and scripts/check-docs fails when the committed file is not what this produces.
+
+Only the derived half. The prose lives in the markdown, where prose belongs.
+
+    python3 scripts/guard-coverage            rewrite the generated block
+    python3 scripts/guard-coverage --check    exit 1 if it is out of date
+"""
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "hooks"))
+DOC = os.path.join(ROOT, "docs", "guard-coverage.md")
+BEGIN = "<!-- BEGIN GENERATED: scripts/guard-coverage -->"
+END = "<!-- END GENERATED -->"
+
+import cases  # noqa: E402
+import guard_db  # noqa: E402
+import guard_git  # noqa: E402
+import guard_tools  # noqa: E402
+
+LISTS = (
+    ("Git", [r[1] for r in guard_git.DESTRUCTIVE_GIT]),
+    ("Filesystem and tooling", [r[1] for r in guard_tools.DESTRUCTIVE_TOOLS]),
+    ("Production deploys and publishes",
+     [r[1] for r in guard_tools.PRODUCTION_DEPLOYS]),
+    ("Database destruction", [r.reason for r in guard_db.DB_WIPE_RULES]),
+)
+COUNTS = (
+    ("Commands refused", sum(1 for c in cases.CMD_CASES if c[2])),
+    ("Ordinary commands allowed", sum(1 for c in cases.CMD_CASES if not c[2])),
+    ("Path cases", len(cases.PATH_CASES)),
+)
+
+
+def generated():
+    out = ["## What is refused\n"]
+    for title, rows in LISTS:
+        out.append("### %s\n" % title)
+        out += ["- %s" % text.rstrip(".") for text in sorted(rows)]
+        out.append("")
+    out.append("## Measured\n")
+    out.append("| Measure | Count |")
+    out.append("|---|---|")
+    out += ["| %s | %d |" % pair for pair in COUNTS]
+    out.append("| Red-team candidates leaking untriaged | 0, or CI fails |")
+    return "\n".join(out)
+
+
+def main():
+    doc = open(DOC, encoding="utf-8").read()
+    head, _, rest = doc.partition(BEGIN)
+    _, _, tail = rest.partition(END)
+    if not rest or not tail:
+        print("docs/guard-coverage.md has no generated block", file=sys.stderr)
+        return 1
+    rendered = "%s%s\n\n%s\n%s" % (head, BEGIN, generated(), END + tail)
+    if "--check" in sys.argv:
+        if doc != rendered:
+            print("docs/guard-coverage.md is out of date; "
+                  "run python3 scripts/guard-coverage", file=sys.stderr)
+            return 1
+        return 0
+    open(DOC, "w", encoding="utf-8").write(rendered)
+    print("wrote the generated block in docs/guard-coverage.md")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

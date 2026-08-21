@@ -43,6 +43,9 @@ def collect() -> Dict[str, object]:
 
     fixtures = guard_checks.Fixtures()
     fixtures.build()
+    # Recorded, not inferred. The summary used to describe what it WOULD have
+    # measured, so a machine with no git printed a healthy-looking report.
+    guard_ran = not fixtures.error
     try:
         findings.extend(guard_checks.check_prescribed_commands(skills, fixtures))
         claims = guard_checks.load_claims()
@@ -56,7 +59,7 @@ def collect() -> Dict[str, object]:
         "findings": findings,
         "coverage": guard_checks.command_coverage(skills),
         "claims": claims,
-        "graph": static_checks.reference_graph(skills),
+        "guard_ran": guard_ran,
     }
 
 
@@ -79,9 +82,15 @@ def print_findings(findings: List[Finding], min_severity: str) -> None:
 
 
 def print_scorecard(data: Dict[str, object]) -> None:
+    """One row per skill: how big it is, how much of it the guard saw, verdict.
+
+    The out/in/dup columns are gone with the checks that produced them. They
+    counted references between skills and repeated phrases, neither of which
+    ever decided anything, and a column nobody acts on is a column that teaches
+    you to skim the table.
+    """
     skills = data["skills"]
     findings = data["findings"]  # type: List[Finding]
-    outbound, inbound = data["graph"]
     coverage = data["coverage"]
 
     counts = defaultdict(lambda: defaultdict(int))  # type: Dict[str, Dict[str, int]]
@@ -90,40 +99,24 @@ def print_scorecard(data: Dict[str, object]) -> None:
             counts[f.skill][f.severity] += 1
 
     total_words = sum(s.word_count for s in skills) or 1
-
-    header = "%-11s %6s %6s %4s %4s %5s %5s %4s %4s  %s" % (
-        "skill", "words", "share", "out", "in", "cmds", "dup", "err", "warn", "status"
-    )
+    header = "%-11s %6s %6s %5s %4s %4s  %s" % (
+        "skill", "words", "share", "cmds", "err", "warn", "status")
     print("\n" + header)
     print("-" * len(header))
     for s in sorted(skills, key=lambda s: -s.word_count):
-        dup = sum(1 for f in findings if f.check == "duplication" and f.skill == s.name)
         err = counts[s.name]["error"]
         warn = counts[s.name]["warn"]
-        status = "FAIL" if err else ("WARN" if warn else "ok")
-        print(
-            "%-11s %6d %5.1f%% %4d %4d %5d %5d %4d %4d  %s"
-            % (
-                s.name + ("*" if s.vendored else ""),
-                s.word_count,
-                100.0 * s.word_count / total_words,
-                len(outbound.get(s.name, ())),
-                len(inbound.get(s.name, ())),
-                coverage.get(s.name, (0, 0))[0],
-                dup,
-                err,
-                warn,
-                status,
-            )
-        )
+        print("%-11s %6d %5.1f%% %5d %4d %4d  %s"
+              % (s.name + ("*" if s.vendored else ""),
+                 s.word_count,
+                 100.0 * s.word_count / total_words,
+                 coverage.get(s.name, (0, 0))[0],
+                 err, warn,
+                 "FAIL" if err else ("WARN" if warn else "ok")))
     print("-" * len(header))
     print("%-11s %6d %5.1f%%" % ("total", total_words, 100.0))
     print("* vendored skill (this repo does not author it) or heuristic threshold")
-    print(
-        "columns: out/in = skills it hands off to / that hand off to it;"
-        " cmds = fenced commands passed through the guard; dup = duplicated runs"
-    )
-
+    print("cmds = fenced command lines from this skill run past the live guard")
 
 def print_limits(data: Dict[str, object]) -> None:
     skills = data["skills"]
@@ -133,10 +126,20 @@ def print_limits(data: Dict[str, object]) -> None:
     claims = data["claims"]
 
     print("\n== what this run measured, and what it did not ==")
-    print("  measured: %d skills, %d fenced command lines run past the live guard" % (len(skills), checked))
-    print("            (%d further fenced lines were not commands and were skipped)" % skipped)
-    print("  measured: %d stated guard behaviours, each pinned to the sentence that claims it" % len(claims))
-    print("  measured: links, cross-references, frontmatter, size, duplicated prose")
+    # Reported from what RAN, not from re-parsing the inputs. These two lines
+    # used to be derived from the markdown and from the length of the claims
+    # file, so a run whose git fixtures never built printed the same numbers as
+    # a healthy one and exited 0. The counts described what it would have done.
+    if data.get("guard_ran"):
+        print("  measured: %d skills, %d fenced command lines run past the live guard" % (len(skills), checked))
+        print("            (%d further fenced lines were not commands and were skipped)" % skipped)
+        print("  measured: %d stated guard behaviours, each pinned to the sentence that claims it" % len(claims))
+    else:
+        print("  measured: %d skills, and NO command reached the live guard" % len(skills))
+        print("  NOT measured: every guard behaviour. The fixtures did not build,")
+        print("                so nothing was run past the guard and no claim was")
+        print("                checked. See the errors above.")
+    print("  measured: frontmatter, house style, links, and referenced paths")
     print("  NOT measured: whether any skill improves an agent's output. That needs a")
     print("                fresh agent per task, with and without. See evals/README.md.")
     print("  NOT measured: guard behaviour under states the fixtures do not reproduce,")

@@ -20,6 +20,18 @@ def block(source):
     return f"{START}\n{body}\n{END}"
 
 
+def read_text(path):
+    """Verbatim. The default read translates newlines, so merging a routing
+    block into a CRLF instruction file rewrote every line ending in it."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def restore_eol(text, original):
+    """Give text back the newline convention the file was already using."""
+    return text.replace("\n", "\r\n") if "\r\n" in original else text
+
+
 def split_managed(text):
     if START not in text and END not in text:
         return text, None
@@ -38,7 +50,7 @@ def save(path, text):
     fd, temporary = tempfile.mkstemp(prefix=".agent-config-instructions-", dir=directory)
     try:
         os.fchmod(fd, mode)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fd = -1
             fh.write(text)
         os.replace(temporary, destination)
@@ -56,10 +68,9 @@ def merge(path, source):
     if os.path.exists(destination):
         if not os.path.isfile(destination):
             raise ValueError(f"{path} is not a regular file")
-        with open(destination, encoding="utf-8") as fh:
-            original = fh.read()
-    clean, _had = split_managed(original)
-    rendered = clean + block(source)
+        original = read_text(destination)
+    clean, _had = split_managed(original.replace("\r\n", "\n"))
+    rendered = restore_eol(clean + block(source), original)
     if rendered == original:
         return
     save(path, rendered)
@@ -69,8 +80,7 @@ def check(path, source):
     destination = target(path)
     if not os.path.isfile(destination):
         return False
-    with open(destination, encoding="utf-8") as fh:
-        text = fh.read()
+    text = read_text(destination).replace("\r\n", "\n")
     try:
         _clean, had = split_managed(text)
     except ValueError:
@@ -82,12 +92,11 @@ def strip(path):
     destination = target(path)
     if not os.path.isfile(destination):
         return
-    with open(destination, encoding="utf-8") as fh:
-        original = fh.read()
-    clean, had = split_managed(original)
+    original = read_text(destination)
+    clean, had = split_managed(original.replace("\r\n", "\n"))
     if not had:
         return
-    save(path, clean)
+    save(path, restore_eol(clean, original))
 
 
 def validate(path):
@@ -96,8 +105,7 @@ def validate(path):
         return
     if not os.path.isfile(destination):
         raise ValueError(f"{path} is not a regular file")
-    with open(destination, encoding="utf-8") as fh:
-        split_managed(fh.read())
+    split_managed(read_text(destination).replace("\r\n", "\n"))
 
 
 def main(argv):

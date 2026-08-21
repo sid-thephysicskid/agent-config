@@ -10,7 +10,7 @@ Nothing here writes to stdout/stderr or exits: that is the adapter's job.
 
 WHAT THIS IS NOT: a security boundary. It fails open by design, and a
 determined agent can defeat it. It is a safety net for the obvious mistakes.
-Run tests.py and floor.py after any change to this file.
+Run tests.py after any change to this file, with and without --no-perf.
 
 The invariants two adversarial passes established are documented where they
 are implemented, not summarised here: a summary of seven other modules goes
@@ -145,7 +145,7 @@ SEGMENT_RULES = (
     ("db-wipe", lambda seg, inv: check_db_wipe(inv.raw, stripped=inv.stripped)),
     ("rm", lambda seg, inv: check_rm(seg)),
     ("tools", lambda seg, inv: check_tools(seg)),
-    ("inline-code", lambda seg, inv: check_inline_code(inv.raw)),
+    ("inline-code", lambda seg, inv: check_inline_code(inv.unwrapped)),
 )
 
 _LAST_RULE = [None]
@@ -193,6 +193,10 @@ def _written_then_run(segs, cwd):
         if body.strip():
             written[target] = body
             written[os.path.basename(target)] = body
+            # ...and the `./name` spelling. Writing `c.sh` then running
+            # `bash ./c.sh` is the same two segments, and it did not join up,
+            # while `> ./c.sh` then `bash ./c.sh` did.
+            written["./" + os.path.basename(target)] = body
     if not written:
         return None
     for s in segs:
@@ -217,13 +221,28 @@ def _normalise(cmd, cwd):
     Returns (cmd, cwd), or None when there is nothing to judge.
     """
     if isinstance(cmd, (list, tuple)):
-        # shlex.join, not " ".join: the plain join destroys the argument
-        # boundaries an argv list already established, so
-        # ["mongosh", "--eval", "db.dropDatabase()"] became text with no
-        # quoting and nine liability commands stopped blocking. Codex's exec
-        # tool is the argv-shaped one, so the plain join meant that host ran
-        # weaker rules than the Claude host on the same logical input.
-        cmd = shlex.join(str(c) for c in cmd)
+        parts = [str(c) for c in cmd]
+        # `["bash", "-lc", X]` RUNS X, so judge X: it is the same text the
+        # string-shaped host sends, and judging it directly is the only way the
+        # two hosts can reach the same verdict. Joining instead produced a
+        # WRAPPED line that the rules then had to unwrap, and the round trip
+        # lost 66 of 1211 verdicts, among them an inline program deleting a
+        # system path and a pipe into a shell. The unwrapping is good at what it
+        # is for, which is a wrapper the agent actually typed; it should not
+        # have to undo an encoding this function chose.
+        if (len(parts) >= 3 and parts[1].startswith("-")
+                and not parts[1].startswith("--")
+                and "c" in parts[1]
+                and os.path.basename(parts[0]) in SHELL_NAMES):
+            cmd = parts[-1]
+        else:
+            # shlex.join, not " ".join: the plain join destroys the argument
+            # boundaries an argv list already established, so
+            # ["mongosh", "--eval", "db.dropDatabase()"] became text with no
+            # quoting and nine liability commands stopped blocking. Codex's
+            # exec tool is the argv-shaped one, so the plain join meant that
+            # host ran weaker rules than the Claude host on the same input.
+            cmd = shlex.join(parts)
     if not cmd or not isinstance(cmd, str) or not cmd.strip():
         return None
     cwd = cwd or os.getcwd()
@@ -441,7 +460,10 @@ def _phase_writes(line, idx):
         hit = check_control_path(normalize_path(target), target)
         if hit:
             return hit
-    return check_guard_mutation(line.seg)
+    # RAW, not seg. For an interpreter the segment may have been replaced
+    # by its `-e` PAYLOAD, so `perl -pi -e s/a/b/ <guard file>` arrived here
+    # as the program `s/a/b/` with the path it rewrites already gone.
+    return check_guard_mutation(line.raw)
 
 
 def _phase_rules(line, idx):
@@ -497,6 +519,12 @@ def check_command(cmd, cwd=None):
     # substitutions separately.
 
     cmd = blank_inert_heredocs(cmd)
+
+    # Whole-line, before the per-segment phases: a pipeline consumer cannot see
+    # the producer that makes the delete dangerous.
+    hit = check_xargs_rm(cmd)
+    if hit:
+        return hit
 
     line = _Line(cmd, cwd)
     for idx, seg in enumerate(line.segs):

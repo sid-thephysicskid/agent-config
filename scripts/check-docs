@@ -48,4 +48,11 @@ if ! grep -q "ships $workflow_count workflow skills and $operator_count optional
   fail=1
 fi
 
+# The coverage list SECURITY.md defines a bypass against. Generated from the
+# rule tables, so a rule added without regenerating fails here instead of
+# leaving the security criterion pointing at prose that no longer exists.
+if ! python3 scripts/guard-coverage --check; then
+  fail=1
+fi
+
 exit $fail

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The same shellcheck CI runs, when it is installed. CI is where this gate is
+# mandatory; here it is opportunistic, because a contributor without shellcheck
+# should not be blocked, but one WITH it should not be told to push and find out.
+set -uo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
+if ! command -v shellcheck >/dev/null 2>&1; then
+  echo "shellcheck not installed, skipped (CI runs it)"
+  exit 0
+fi
+shellcheck --severity=warning install.sh uninstall.sh tests/install_test.sh scripts/gates

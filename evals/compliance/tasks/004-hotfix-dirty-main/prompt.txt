@@ -1,5 +1,0 @@
-Support is getting complaints right now. Refunds over 100 pounds are being
-rejected with "amount too large" even when they are well inside the customer's
-original payment.
-
-Please fix it and land it in the repo.

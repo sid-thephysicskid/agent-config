@@ -19,7 +19,7 @@ That installs:
 Restart your coding agent after installation. Codex will ask you to review new
 hooks in `/hooks`.
 
-macOS and Linux are supported. You need Node 18 or newer and Python 3.8 or newer.
+macOS and Linux are supported. You need Node 20 or newer and Python 3.9 or newer.
 
 ### Existing setups
 
@@ -104,6 +104,18 @@ Do this instead: push your feature branch and open a PR
 
 It is a safety net, not a sandbox. Keep branch protection, least-privilege
 credentials, database roles, backups, CI, and human review.
+
+[docs/guard-coverage.md](docs/guard-coverage.md) lists what is refused, who
+this defends against, and the gaps that are accepted on purpose. It is generated
+from the rules, so it cannot drift from them.
+
+## Just the guard
+
+The guardrails install on their own, with no skills and no instruction files:
+
+```bash
+npx @sid-thephysicskid/agent-config@latest install guard
+```
 
 ## Optional extras
 

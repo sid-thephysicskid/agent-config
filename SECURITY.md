@@ -5,12 +5,12 @@
 The guard hooks in `hooks/` are a safety net against agent mistakes, not a
 security boundary. Internal errors fail **open**. Analysis timeouts also fail
 open unless a cheap scan finds a destructive command shape, in which case the
-tool call is refused. Read the [Guard section](README.md#guard) before reporting
+tool call is refused. Read [docs/guard-coverage.md](docs/guard-coverage.md) before reporting
 anything.
 
 ## Worth reporting
 
-- **A bypass.** A command the README's coverage list says is blocked, and is not. The interesting shape is a rule that fires on the plain spelling and misses a sibling one: a quoted refspec, a wrapper word, an environment prefix, a padded command.
+- **A bypass.** A command [docs/guard-coverage.md](docs/guard-coverage.md) says is refused, and is not. Read the accepted gaps in `evals/redteam-candidates.txt` first; many shapes are already recorded as out of scope, each with a reason. The interesting shape is a rule that fires on the plain spelling and misses a sibling one: a quoted refspec, a wrapper word, an environment prefix, a padded command.
 - **A guard that fails open on a shape it should handle.** A crash, a hang, or a parse it gives up on, where the rule itself clearly covers the case.
 
 ## Not a vulnerability

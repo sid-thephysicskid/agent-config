@@ -27,8 +27,11 @@ class NpxCliTest(unittest.TestCase):
 
     def test_help_and_version(self):
         with tempfile.TemporaryDirectory() as home:
-            self.assertIn("install [--extras]",
-                          self.run_cli(home, "--help").stdout)
+            help_text = self.run_cli(home, "--help").stdout
+            self.assertIn("install [guard] [--extras]", help_text)
+            # The guardrails install on their own. Pinned because that path was
+            # shipped, called legacy in the usage text, and documented nowhere.
+            self.assertIn("install guard", help_text)
             self.assertEqual(self.run_cli(home, "--version").stdout.strip(), "0.2.0")
 
     def test_guard_round_trip_uses_stable_versioned_payload(self):

@@ -18,8 +18,7 @@ chk "workflow is not installed by default" "$([ -e "$H/.claude/skills/ship" ] &&
 chk "settings has hook" "$(grep -c guard-bash "$H/.claude/settings.json")" "1"
 
 echo "== 1b. release CI gates both guard suites once =="
-chk "rule suite is a release gate" "$(grep -c 'hooks/tests.py --no-perf' "$S/repo/scripts/ci-local")" "1"
-chk "floor suite is a release gate" "$(grep -c 'hooks/floor.py' "$S/repo/scripts/ci-local")" "1"
+chk "rule suite is a release gate" "$(grep -c 'hooks/tests.py --no-perf' "$S/repo/scripts/gates")" "1"
 
 echo "== 2. existing instructions and unrelated skills are preserved =="
 H="$S/h2"; mkdir -p "$H/.claude/skills/my-own-skill"
@@ -1116,6 +1115,97 @@ chk "read-only custom Codex parent exits nonzero" "$([ $rc -ne 0 ] && echo yes |
 chk "read-only custom Codex parent leaves no Claude skills" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
 chk "read-only custom Codex parent leaves no Claude settings" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
 chmod 0755 "$H/locked"
+
+echo "== 76. --check proves the guard DECIDES, not just that it is wired =="
+# Case 40 catches a hook repointed at a no-op. This catches the other half: a
+# hook that is still our symlink, still named in settings.json, and dead,
+# because a rule module it imports no longer parses. The hook records a
+# fail-open and exits 0, so every wiring assertion above still passes while
+# the machine would accept a force push to a protected branch.
+H="$S/h76"; mkdir -p "$H"
+HOME="$H" bash "$S/repo/install.sh" guard >/dev/null 2>&1
+out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"; rc=$?
+chk "a healthy guard is proven live" "$(grep -c 'guard proven live' <<<"$out")" "1"
+chk "and the check passes" "$rc" "0"
+# The deliberate violation CONTRIBUTING.md asks for. Restored below.
+cp "$S/repo/hooks/guard_parse.py" "$S/guard_parse.orig"
+printf '\nbroken(\n' >> "$S/repo/hooks/guard_parse.py"
+out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"; rc=$?
+# A broken PARSER breaks every module, so every probe reports. That is the
+# point: one probe per rule module, so a single dead module is named rather
+# than masked by a neighbour that still answers.
+chk "a wired but dead guard is caught" "$([ "$(grep -c 'did NOT refuse' <<<"$out")" -ge 1 ] && echo yes || echo no)" "yes"
+chk "and it names which rules" "$([ "$(grep -c 'rules are not protecting' <<<"$out")" -ge 1 ] && echo yes || echo no)" "yes"
+chk "and the check fails" "$([ $rc -ne 0 ] && echo yes || echo no)" "yes"
+chk "and the fail-open log is surfaced" "$(grep -c 'guard-failopen.log is not empty' <<<"$out")" "1"
+cp "$S/guard_parse.orig" "$S/repo/hooks/guard_parse.py"
+out="$(HOME="$H" bash "$S/repo/install.sh" guard --check 2>&1)"
+chk "restoring the module restores the proof" "$(grep -c 'guard proven live' <<<"$out")" "1"
+
+echo "== 77. instruction files are recoverable and keep their line endings =="
+# The merge replaces whatever sits between the markers. A user who had already
+# used those exact markers lost the text inside them, and instruction files got
+# no recovery copy at all, so it was unrecoverable. settings.json always had one.
+H="$S/h77a"; mkdir -p "$H/.claude" "$H/.codex"
+printf 'MY RULES\n<!-- agent-config:start -->\nMY OWN TEXT\n<!-- agent-config:end -->\nafter\n' > "$H/.claude/CLAUDE.md"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "a recovery copy is kept" "$([ -f "$H/.claude/CLAUDE.md.before-agent-config" ] && echo yes || echo no)" "yes"
+chk "their text is recoverable" "$(grep -c 'MY OWN TEXT' "$H/.claude/CLAUDE.md.before-agent-config" 2>/dev/null || echo 0)" "1"
+# A CRLF file was rewritten to LF, whole file, with nothing to restore from.
+H="$S/h77b"; mkdir -p "$H/.claude" "$H/.codex"
+printf 'MY RULES\r\nsecond line\r\n' > "$H/.claude/CLAUDE.md"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "CRLF survives install" "$([ "$(tr -dc '\r' < "$H/.claude/CLAUDE.md" | wc -c | tr -d ' ')" -ge 2 ] && echo yes || echo no)" "yes"
+out="$(HOME="$H" bash "$S/repo/install.sh" standard --check 2>&1)"
+chk "and the block is not reported stale" "$(grep -c 'missing or stale' <<<"$out")" "0"
+HOME="$H" bash "$S/repo/uninstall.sh" >/dev/null 2>&1
+chk "uninstall leaves CRLF intact" "$(od -c "$H/.claude/CLAUDE.md" | head -1 | grep -c '\\r')" "1"
+# ...and an LF file must not gain carriage returns.
+H="$S/h77c"; mkdir -p "$H/.claude" "$H/.codex"
+printf 'MY RULES\nsecond\n' > "$H/.claude/CLAUDE.md"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "an LF file stays LF" "$(tr -dc '\r' < "$H/.claude/CLAUDE.md" | wc -c | tr -d ' ')" "0"
+# A clean machine gets a symlink, not a merge, so it needs no backup.
+H="$S/h77d"; mkdir -p "$H/.claude" "$H/.codex"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "no spurious backup on a clean machine" "$([ -e "$H/.claude/CLAUDE.md.before-agent-config" ] && echo yes || echo no)" "no"
+
+echo "== 78. installer integrity: no half-wire, honest backups, honest uninstall =="
+# A dotfile-managed Codex hooks.json whose target does not exist got past every
+# preflight. The Claude half was fully wired, then the merge failed on the
+# missing parent, leaving Codex with skills and routing and no guardrails.
+H="$S/h78a"; mkdir -p "$H/.claude" "$H/.codex" "$H/dots"
+ln -s "$H/dots/sub/hooks.json" "$H/.codex/hooks.json"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "a dangling codex hooks.json aborts" "$([ $? -ne 0 ] && echo yes || echo no)" "yes"
+chk "and nothing was wired first" "$([ -e "$H/.claude/skills/ship" ] && echo yes || echo no)" "no"
+chk "no claude settings either" "$([ -e "$H/.claude/settings.json" ] && echo yes || echo no)" "no"
+
+# On a machine with no settings.json, install #1 creates it and takes no
+# backup, so install #2 used to copy the ALREADY MODIFIED file under a name
+# that says "before" and hand it back as the recovery copy.
+H="$S/h78b"; mkdir -p "$H/.claude" "$H/.codex"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "no backup of a file we created" \
+  "$([ -e "$H/.claude/settings.json.before-agent-config" ] && echo yes || echo no)" "no"
+# ...while a genuinely pre-existing file still gets exactly one.
+H="$S/h78c"; mkdir -p "$H/.claude" "$H/.codex"
+echo '{"model":"opus"}' > "$H/.claude/settings.json"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+chk "a pre-existing file is backed up" \
+  "$(grep -c '"model": *"opus"' "$H/.claude/settings.json.before-agent-config")" "1"
+chk "and the backup is untouched by us" \
+  "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json.before-agent-config" || true)" "0"
+
+# Losing the deny ownership sidecar left every rule in place and said nothing.
+H="$S/h78d"; mkdir -p "$H/.claude" "$H/.codex"
+HOME="$H" bash "$S/repo/install.sh" standard >/dev/null 2>&1
+rm -f "$H/.claude/settings.json.agent-config-deny.json"
+out="$(HOME="$H" bash "$S/repo/uninstall.sh" 2>&1)"
+chk "uninstall says which rules it left" "$(grep -c 'ownership record is missing' <<<"$out")" "1"
 
 echo
 echo "PASS $pass  FAIL $fail"

@@ -287,6 +287,20 @@ def strip(path):
     cfg = _load(path)
     _validate(cfg)
     managed = set(_load_managed_denies(path))
+    # Leaving the rule is the right call: without the ledger it cannot be told
+    # apart from an identical rule the user wrote. Saying nothing is not. A lost
+    # sidecar, which is an untracked file next to settings.json and easy to drop
+    # in a restore, made uninstall leave every deny rule while reporting that
+    # configuration was preserved and the guard removed.
+    perms_now = cfg.get("permissions")
+    present = perms_now.get("deny") if isinstance(perms_now, dict) else None
+    orphaned = [r for r in (present or []) if r in DENY and r not in managed]
+    if orphaned:
+        sys.stderr.write(
+            "leaving %d deny rule(s) in %s: the ownership record is missing, so "
+            "they cannot be told apart from rules you added yourself. Remove by "
+            "hand if you want them gone:\n%s\n"
+            % (len(orphaned), path, "\n".join("  " + r for r in orphaned)))
     for event in {e for e, _m, _s, _t in WIRING}:
         entries = cfg.get("hooks", {}).get(event, [])
         for entry in entries:

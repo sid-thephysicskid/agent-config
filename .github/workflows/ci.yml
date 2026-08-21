@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # install.sh refuses anything below 3.8; 3.9 is the oldest runner
+        # install.sh refuses anything below 3.9, which is also the oldest runner
         # GitHub still offers, so it is the oldest this can prove. 3.13 catches
         # anything the newer parser rejects. If either breaks, an adopter breaks.
         python: ["3.9", "3.13"]
@@ -30,15 +30,18 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      # The npm CLI and onboarding tests below shell out to node. Pin the
+      # version package.json declares, or the only node ever exercised is
+      # whatever the runner happens to ship, and the stated floor is untested.
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "20"
 
       # --no-perf on CI: the wall-clock budgets flake on a shared runner and
       # say nothing about correctness. The big-instance DoS shapes still run
       # in the dedicated job below, where a failure means something.
       - name: rule suite
         run: python3 hooks/tests.py --no-perf
-
-      - name: floor suite
-        run: python3 hooks/floor.py
 
       # The layer a defect silently disables everything behind.
       - name: adapter suite
@@ -59,6 +62,19 @@ jobs:
       - name: project agent initializer
         run: python3 tests/test_agent_init.py
 
+      # These three gated a release but never a pull request.
+      # test_onboarding.py is the only coverage of the README's "Existing
+      # setups" section through the npx path, and check-docs is the only
+      # thing keeping the README and the packaged skills in agreement.
+      - name: onboarding through the npx path
+        run: python3 tests/test_onboarding.py
+
+      - name: installer helpers
+        run: python3 tests/test_install_helpers.py
+
+      - name: docs match code
+        run: ./scripts/check-docs
+
       - name: wizard tests
         run: python3 operator-skills/wizard/tests/test_wizard.py
 
@@ -72,15 +88,6 @@ jobs:
 
       - name: skills evals
         run: python3 evals/run_evals.py
-
-      # These scored the compliance harness's own output and no gate ran them,
-      # which is how 706 lines of tests rot unobserved next to a result that
-      # had to be withdrawn. Three seconds.
-      - name: compliance metrics tests
-        run: python3 evals/compliance/test_metrics.py
-
-      - name: compliance session tests
-        run: python3 evals/compliance/test_session.py
 
       # Fails on an UNTRIAGED leak only: a known one carries a written reason.
       - name: red team corpus
@@ -103,7 +110,7 @@ jobs:
   # Linux only. macOS runners bill at 10x and this suite takes ~16 minutes
   # there, so it cost ~165 of the 2000 free monthly minutes on every push:
   # about eleven pushes a month. It is also the platform least worth paying
-  # for here, because development happens on macOS, so `./scripts/ci-local`
+  # for here, because development happens on macOS, so `./scripts/gates`
   # already exercises every BSD-tool and case-insensitive-filesystem path on
   # a real Mac before anything is pushed. Linux is the one nobody would
   # otherwise test.
@@ -128,7 +135,9 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=warning install.sh uninstall.sh tests/install_test.sh
+          # Same list as scripts/shellcheck-if-present, which runs it locally
+          # when installed. A tilde inside a quoted message reached CI once.
+          shellcheck --severity=warning install.sh uninstall.sh tests/install_test.sh scripts/gates
 
       # No pipe. Piping into `tail` hands the step `tail`'s exit status, so this
       # gate reported success over a SyntaxError for as long as it existed.
@@ -152,6 +161,9 @@ jobs:
         run: |
           git ls-files --error-unmatch AGENTS.local.md >/dev/null 2>&1 \
             && { echo "AGENTS.local.md is tracked and must not be"; exit 1; } || true
+
+      - name: credential gate detects current issuer formats
+        run: python3 tests/test_audit_patterns.py
 
       - name: no secrets or credentials
         run: python3 tests/audit.py

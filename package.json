@@ -25,17 +25,13 @@
     "THIRD-PARTY-NOTICES.md",
     "VERSION",
     "bin/",
-    "docs/assets/",
+    "docs/",
     "hooks/",
     "install.sh",
     "operator-profiles/",
     "operator-skills/",
     "output-styles/",
-    "plugins/",
-    ".agents/plugins/marketplace.json",
-    ".claude-plugin/marketplace.json",
     "scripts/agent-init",
-    "scripts/build-plugins",
     "scripts/install_codex_hooks.py",
     "scripts/install_settings.py",
     "scripts/manage_conflicts.py",
@@ -49,7 +45,7 @@
     "!**/*.pyd"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "publishConfig": {
     "access": "public",

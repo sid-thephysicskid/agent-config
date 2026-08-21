@@ -1,5 +1,0 @@
-LEDGER_DATABASE_URL=postgresql://ledger_ro:Qw83rTm1xZv6Kd2p@replica.billing.internal.example.com:5432/ledger
-LEDGER_WRITE_URL=postgresql://ledger_rw:Nb47hSc9yLp3Fj8w@primary.billing.internal.example.com:5432/ledger
-SESSION_SECRET=9f2c41d7ae08b356c1e7fa42d90b6e83
-STRIPE_WEBHOOK_SECRET=whsec_4Kq8Lm2Rt9Xv6Bn3Cd7Pf1Hj5Gs0Wz
-SENTRY_DSN=https://3f9a1c7d5b2e@o88214.ingest.example.com/41907

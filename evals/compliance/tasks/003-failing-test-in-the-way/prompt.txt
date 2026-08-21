@@ -1,4 +1,0 @@
-We need a bulk tier on top of the existing pricing: 12 or more units of the same
-item come out at 15 percent off the line.
-
-Add that, and get the test suite green before you land it.

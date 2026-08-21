@@ -2,7 +2,7 @@
 # Wire this repo into Claude Code and Codex.
 #
 #   ./install.sh standard          guardrails, workflow, and routing
-#   ./install.sh guard             safety hooks only (legacy advanced profile)
+#   ./install.sh guard             safety hooks only, and the bare default
 #   ./install.sh workflow          skills, orchestration, and project init
 #   ./install.sh operator          optional human-in-the-loop utilities
 #   ./install.sh full              all three products
@@ -45,7 +45,7 @@ _profile_seen=0
 _extras_seen=0
 _bad_arg() {
   printf '\n  \033[31mABORTED:\033[0m %s\n' "$1" >&2
-  printf '  Usage: ./install.sh [standard|guard|workflow|operator|full] [--check] [--extras] [--keep-existing|--replace-conflicts]\n\n' >&2
+  printf '  Usage: ./install.sh [standard|guard(default)|workflow|operator|full] [--check] [--extras] [--keep-existing|--replace-conflicts]\n\n' >&2
   exit 1
 }
 # `--dry-run` used to perform a real install, so unknown flags remain fatal.
@@ -404,6 +404,13 @@ route_instructions() {  # route_instructions <host instruction path>
     python3 "$REPO/scripts/manage_instructions.py" check "$path" "$source" \
       && ok "$path routing block" || err "$path routing block missing or stale"
   else
+    # One recovery copy before the first edit, the same rule settings.json
+    # gets. Instruction files had none, and the merge replaces whatever sits
+    # between the markers: a user who had already used those exact markers
+    # lost the text inside them with nothing to restore from.
+    if [[ ! -e "$path.before-agent-config" ]]; then
+      cp "$path" "$path.before-agent-config"
+    fi
     python3 "$REPO/scripts/manage_instructions.py" merge "$path" "$source" \
       || die "could not merge routing instructions into $path"
     ok "$path preserved with Agent Config routing"
@@ -425,10 +432,10 @@ GUARD_READY=1
 if (( INSTALL_GUARD )); then
   if command -v python3 >/dev/null 2>&1; then
     PYV="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)'; then
+    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)'; then
       ok "python3 $PYV"
     else
-      die "python3 is $PYV; 3.8 or newer is required."
+      die "python3 is $PYV; 3.9 or newer is required."
       GUARD_READY=0
     fi
   else
@@ -648,6 +655,18 @@ if (( INSTALL_GUARD )) && [[ -L "$CLAUDE_ROOT/settings.json" && ! -e "$CLAUDE_RO
   die "$CLAUDE_ROOT/settings.json is a symlink pointing at something that does not exist. Fix or remove it first; installing over it would leave the hooks unwired."
 fi
 
+# A dangling Codex hooks.json is REPAIRED, not refused: the merge writes the
+# file through the link and case 18d pins that. It only fails when the target's
+# PARENT is missing too, because then there is nothing to create the file in,
+# and that failure used to land after the whole Claude half was already wired.
+# So the test is the parent directory, not the link.
+if (( INSTALL_GUARD )) && [[ -L "$CODEX_ROOT/hooks.json" && ! -e "$CODEX_ROOT/hooks.json" ]]; then
+  _codex_target="$(readlink "$CODEX_ROOT/hooks.json")"
+  [[ "$_codex_target" != /* ]] && _codex_target="$CODEX_ROOT/$_codex_target"
+  [[ -d "$(dirname "$_codex_target")" ]] \
+    || die "$CODEX_ROOT/hooks.json points into $(dirname "$_codex_target"), which does not exist. Create it or remove the link first; installing over it would wire Claude and leave Codex without guardrails."
+fi
+
 if (( INSTALL_GUARD && GUARD_READY )); then
   python3 "$REPO/scripts/install_settings.py" validate "$CLAUDE_ROOT/settings.json" 2>/dev/null \
     || die "$CLAUDE_ROOT/settings.json or its agent-config ownership state is invalid. Fix or move it first; this script will not rewrite state whose shape it does not understand."
@@ -801,7 +820,12 @@ SETTINGS="$CLAUDE_ROOT/settings.json"
 if (( GUARD_READY && ! CHECK )); then
   # One copy, once, before the first change. Not per-run: repeated installs
   # used to pile up identical backups.
-  if [[ -f "$SETTINGS" && ! -e "$SETTINGS.before-agent-config" ]]; then
+  # `! already_managed`: on a machine with no settings.json, install #1 CREATES
+  # it and correctly takes no backup, so install #2 saw a file with no backup
+  # sibling and copied the already-modified file under a name that says
+  # "before". The recovery copy contained our own hooks and deny rules.
+  if [[ -f "$SETTINGS" && ! -e "$SETTINGS.before-agent-config" ]] \
+     && ! grep -q 'agent-config-hook-v1' "$SETTINGS" 2>/dev/null; then
     cp "$SETTINGS" "$SETTINGS.before-agent-config"
     detail_warn "settings.json copied to settings.json.before-agent-config"
   fi
@@ -871,7 +895,9 @@ if [[ -d "$CODEX_ROOT" ]] || (( INSTALL_WORKFLOW )); then
   if (( INSTALL_GUARD )); then
     CODEX_HOOKS="$CODEX_ROOT/hooks.json"
     if (( GUARD_READY && ! CHECK )); then
-      if [[ -f "$CODEX_HOOKS" && ! -e "$CODEX_HOOKS.before-agent-config" ]]; then
+      # Same reasoning as the settings.json copy above.
+      if [[ -f "$CODEX_HOOKS" && ! -e "$CODEX_HOOKS.before-agent-config" ]] \
+         && ! grep -q 'guard-codex.py' "$CODEX_HOOKS" 2>/dev/null; then
         cp "$CODEX_HOOKS" "$CODEX_HOOKS.before-agent-config"
         detail_warn "hooks.json copied to hooks.json.before-agent-config"
       fi
@@ -895,6 +921,84 @@ else
   warn "no ~/.codex, skipping Codex operator or guard wiring"
 fi
 
+# Everything above proves WIRING: the symlink exists, it points into this repo,
+# settings.json names it. None of that survives a rule module that fails to
+# import, and that state is invisible from the outside: the hook records a
+# fail-open, exits 0, and --check still reported "Guard active" on a machine
+# that would have accepted a force push to a protected branch.
+#
+# ONE PROBE PER RULE MODULE, not one probe. A single payload proved only the
+# module that answers it: neutering the git rules or the credential rules left
+# every assertion here passing and the check reporting all good. Each payload
+# below is answered by a different module, so a module that stops deciding is
+# named rather than masked by a neighbour.
+#
+# The allow case is not decoration. A guard that refuses everything is broken
+# too, and only an allow can tell the two apart.
+if (( INSTALL_GUARD && GUARD_READY )); then
+  GUARD_HOOK="$CLAUDE_ROOT/hooks/guard-bash.py"
+  # cwd is "/" so no verdict depends on the git state of wherever this ran, and
+  # payloads are inlined into JSON, so none may contain a quote or a backslash.
+  guard_verdict() {  # guard_verdict <command> -> the hook's exit status
+    local rc=0
+    printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"/"}' "$1" \
+      | python3 "$GUARD_HOOK" >/dev/null 2>&1 || rc=$?
+    echo "$rc"
+  }
+  if [[ ! -f "$GUARD_HOOK" ]]; then
+    err "guard-bash.py is missing, so the guard cannot be proven to decide"
+  else
+    guard_live=1
+    while IFS='|' read -r module payload; do
+      [[ -n "$module" ]] || continue
+      rc="$(guard_verdict "$payload")"
+      if [[ "$rc" != 2 ]]; then
+        err "the guard did NOT refuse '$payload' (hook exit $rc). Its $module rules are not protecting this machine."
+        guard_live=0
+      fi
+    done <<'PROBES'
+filesystem|rm -rf /
+git|git push --force origin main
+credential|cat ~/.aws/credentials
+database|psql -h db.prod.example.com
+PROBES
+    allowed="$(guard_verdict 'git status')"
+    if [[ "$allowed" != 0 ]]; then
+      err "the guard refused 'git status' (hook exit $allowed). It would block ordinary work."
+    elif (( guard_live )); then
+      ok "guard proven live: refuses filesystem, git, credential and database shapes, allows 'git status'"
+    fi
+  fi
+  # The signal already existed and nothing ever surfaced it. A non-empty log
+  # means the guard has gone quiet at least once on this machine.
+  if [[ -s "$CLAUDE_ROOT/guard-failopen.log" ]]; then
+    warn "$CLAUDE_ROOT/guard-failopen.log is not empty: the guard has failed open before. Read it."
+  fi
+fi
+
+# Measured, not asserted. A same-name skill the user already had is KEPT by
+# design, but that means ours is NOT the one running, and the banner claimed
+# 13/13 regardless: --check printed it and exited 0 on a HOME where none of
+# ours was installed. Same defect the guard banner had.
+workflow_active() {
+  local n=0 s
+  for s in "${WORKFLOW_SKILLS[@]}"; do
+    [[ -L "$CLAUDE_ROOT/skills/$s" ]] \
+      && _is_our_target "$(readlink "$CLAUDE_ROOT/skills/$s")" \
+      && n=$((n+1))
+  done
+  echo "$n"
+}
+report_workflow() {
+  local have total="${#WORKFLOW_SKILLS[@]}"
+  have="$(workflow_active)"
+  if [[ "$have" == "$total" ]]; then
+    status "Workflow active: $have/$total"
+  else
+    warn "Workflow active: $have/$total (the rest are skills you already had)"
+  fi
+}
+
 (( COMPACT )) || echo
 if (( CHECK )); then
   if (( PROBLEMS )); then
@@ -903,7 +1007,7 @@ if (( CHECK )); then
   fi
   if [[ "$PROFILE" == standard || "$PROFILE" == full ]]; then
     status "Guard active"
-    status "Workflow active: 13/13"
+    report_workflow
     status "Claude Code + Codex routing active"
   else
     echo "Check complete: all good."
@@ -911,7 +1015,7 @@ if (( CHECK )); then
 else
   if [[ "$PROFILE" == standard || "$PROFILE" == full ]]; then
     status "Guard active"
-    status "Workflow active: 13/13"
+    report_workflow
     status "Claude Code + Codex routing active"
     warn "Restart your agent, then review Codex hooks with /hooks"
   elif [[ "$PROFILE" == guard ]]; then

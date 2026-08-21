@@ -44,6 +44,14 @@ MIDDLE_SIGNALS = (
     r"\bfilter-(branch|repo)\b",
     r"\breflog\s+expire\b",
     r"\bupdate-ref\s+-d\b",
+    # Added with the rules below, per the note above: a rule with no
+    # signal here is a rule that stops applying once the line is padded
+    # past the analysis window. These five had rules and no signal.
+    r"\bbranch\s+-[\w-]*f(?![-\w])",
+    r"\bcheckout\s+-[\w-]*B(?![-\w])",
+    r"\bupdate-ref\s+refs/heads/",
+    r"\bsymbolic-ref\b",
+    r"\bcore\.hooksPath\b",
 )
 
 # Every git verb that writes a commit. `commit` alone left four ways onto a
@@ -180,6 +188,40 @@ def git_invocations(seg):
             if len(found) >= MAX_GIT_INVOCATIONS:
                 break
     return found
+
+# Subcommands where git defines a dry run that writes NOTHING. Scoped on
+# purpose, not applied to every verb: the short `-n` is not universal, and
+# `git commit -n` is --no-verify, which really does commit. Honouring `-n`
+# there would turn the protected-branch rule off with one flag.
+#   git-clean(1): "-n, --dry-run  Don't actually remove anything ...
+#     Configuration variable clean.requireForce is ignored, as nothing will
+#     be deleted anyway." So `git clean -n -f` deletes nothing.
+#   git-push(1):  "-n, --dry-run  Do everything except actually send the
+#     updates."
+DRY_RUN_SUBS = ("push", "clean")
+
+
+def _is_dry_run(seg, sub):
+    """Does this invocation carry a dry-run flag that makes it a preview?
+
+    By TOKEN POSITION, not by searching the text. A bare search matched the
+    flag inside a pathspec after `--`, inside another flag's value, and inside
+    a quoted filename, so `git clean -fd -- --dry-run` read as a preview and
+    deleted. Everything after `--` is an operand, never a flag.
+    """
+    if sub not in DRY_RUN_SUBS:
+        return False
+    args = _args_after(seg, sub) or []
+    for arg in args:
+        if arg == "--":
+            return False
+        if arg == "--dry-run":
+            return True
+        # A short cluster: -n, -nd, -xdn, -nf. Not a long option, so one dash.
+        if re.fullmatch(r"-[a-zA-Z]*n[a-zA-Z]*", arg):
+            return True
+    return False
+
 
 DESTRUCTIVE_GIT = (
     (r"\breset\s+.*--hard", "git reset --hard (discards committed and staged work)",
@@ -413,6 +455,11 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
                         "git checkout -b feature/<name>   (branch there, then open a PR)")
 
         if sub == "push":
+            # A dry-run push sends nothing, so every push rule below is moot
+            # for it. `continue`, not `return None`: a later invocation on the
+            # same line still has to be judged.
+            if _is_dry_run(seg, sub):
+                continue
             # Quotes REMOVED before the refspec scans. They are not part of the
             # refspec, and `git push origin 'main'` was allowed while
             # `git push origin main` blocked. Also normalise `refs/heads/main`
@@ -463,6 +510,8 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
         # scan the segment with quoted runs removed.
         scan = strip_quoted(seg) if sub in (
             "commit", "tag", "notes", "log", "show", "grep", "blame") else seg
+        if _is_dry_run(seg, sub):
+            continue
         for pat, what, fix in DESTRUCTIVE_GIT:
             if re.search(pat, scan):
                 return (what, fix)

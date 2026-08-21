@@ -13,11 +13,16 @@ a passing test run:
   a BLIND     a live rule with no case pinning it. Deleting it silently
               reopens a hole, and the suite stays green.
 
-This finds both by removing each row and re-judging only the commands that
-row can match. It is the one tool here that can tell a load-bearing regex
-from a leftover, which is what makes a refactor of the rule tables reviewable.
+Removing each row and re-judging the commands it can match finds the UNION of
+the two. Telling them apart is a judgement about what the row is for, so the
+output asks rather than guesses. It is still the one tool here that can tell a
+load-bearing regex from a leftover, which is what makes a refactor reviewable.
 
-Manual, not a gate: it mutates module state and takes a few seconds. Run it
+It covers the three flat rule tables. The regex-shaped rules and the oversize
+signal lists are not mutated, so a clean run means those 41 rows are all
+load-bearing, not that every rule in the guard is.
+
+Manual, not a gate: it mutates module state and takes a few minutes. Run it
 before and after any change to a rule table.
 
 Python 3.9, stdlib only, no network.
@@ -30,7 +35,6 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "hooks"))
 
 import cases  # noqa: E402
-import floor  # noqa: E402
 import guard_git  # noqa: E402
 import guard_rules  # noqa: E402
 import guard_tools  # noqa: E402
@@ -47,13 +51,7 @@ TABLES = (
 def corpus():
     """Every command the suites judge, with the cwd and verdict they expect."""
     out = []
-    for case in cases.CMD_CASES:
-        out.append((case[0], case[1], case[2]))
-    for cmd in floor.LIABILITY:
-        out.append((cmd if isinstance(cmd, str) else cmd[0], MAIN, True))
-    for cmd in floor.ORDINARY:
-        out.append((cmd if isinstance(cmd, str) else cmd[0], FEAT, False))
-    return out
+    return [(case[0], case[1], case[2]) for case in cases.CMD_CASES]
 
 
 def verdicts(commands):
@@ -66,7 +64,7 @@ def main():
         sum(len(getattr(m, a)) for m, a in TABLES), len(commands)))
 
     before = verdicts(commands)
-    leftovers, blinds = [], []
+    leftovers = []
 
     for module, attr in TABLES:
         rows = getattr(module, attr)

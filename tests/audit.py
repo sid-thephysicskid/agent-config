@@ -67,28 +67,34 @@ def read(f):
 SECRETS = [
     (r"gh[pousr]_[A-Za-z0-9]{20,}", "GitHub token"),
     (r"sk-ant-[A-Za-z0-9_-]{20,}", "Anthropic key"),
+    # `sk-[A-Za-z0-9]{32,}` alone missed every CURRENT issuer format, because
+    # the segment after `sk-` breaks on the first hyphen or underscore:
+    # sk-proj- is OpenAI's default today, and sk_live_ is Stripe. The pattern
+    # right above this one already showed that keys carry separators.
+    (r"sk-proj-[A-Za-z0-9_-]{20,}", "OpenAI project key"),
     (r"sk-[A-Za-z0-9]{32,}", "OpenAI-style key"),
+    (r"sk_(live|test)_[A-Za-z0-9]{20,}", "Stripe secret key"),
+    (r"rk_(live|test)_[A-Za-z0-9]{20,}", "Stripe restricted key"),
     (r"AKIA[0-9A-Z]{16}", "AWS access key id"),
+    # The id was matched and the SECRET never was, so the half that actually
+    # grants access could be committed while the gate reported clean. Anchored
+    # on an assignment, because 40 base64 characters on their own are not a
+    # distinctive enough shape to refuse a merge over.
+    (r"(?i)aws_secret_access_key\s*[:=]\s*['\"]?[A-Za-z0-9/+=]{40}", "AWS secret access key"),
+    (r"AIza[0-9A-Za-z_-]{35}", "Google API key"),
+    (r"ya29\.[0-9A-Za-z_-]{20,}", "Google OAuth token"),
+    (r"npm_[A-Za-z0-9]{36}", "npm token"),
     (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "private key block"),
     (r"xox[baprs]-[A-Za-z0-9-]{10,}", "Slack token"),
-    (r"postgres(ql)?://[^\s'\"]*:[^\s'\"@]{6,}@", "database URL with a password"),
+    (r"xapp-[0-9]-[A-Za-z0-9-]{10,}", "Slack app token"),
+    (r"glpat-[A-Za-z0-9_-]{20,}", "GitLab token"),
+    (r"dop_v1_[a-f0-9]{64}", "DigitalOcean token"),
+    (r"hf_[A-Za-z0-9]{30,}", "Hugging Face token"),
+    # Any client, not just one. postgres was matched and mysql, mongodb and
+    # redis were not, though all four appear in real connection strings.
+    (r"(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp|clickhouse)://"
+     r"[^\s'\"/]*:[^\s'\"@/]{6,}@", "database URL with a password"),
 ]
-# Files whose entire purpose is to LOOK like a credential, listed one by one
-# rather than by pattern. The compliance harness needs a fixture holding a
-# convincing database URL, because a task that tempts an agent into committing
-# a secret cannot use an obviously fake one.
-#
-# Named explicitly, and deliberately NOT solved with a marker line inside the
-# fixture: the agent under test reads that file during a run, and a comment
-# saying TEST FIXTURE tells it it is being tested, which voids the experiment.
-#
-# Adding a path here is a decision to be reviewed in a diff. Never widen it to
-# a directory or a glob.
-CREDENTIAL_FIXTURES = {
-    "evals/compliance/tasks/002-credential-nearby/dirty/dotfile__env",
-    "evals/compliance/tasks/010-marathon/dirty/dotfile__env",
-}
-
 # The DENY list lives in scripts/install_settings.py and both shell scripts
 # call it, so there is no second copy to drift. This used to be 14 lines
 # asserting that two hand-kept literals agreed; the assertion went away with
@@ -109,21 +115,11 @@ def _deny_rules_are_single_sourced():
 _deny_rules_are_single_sourced()
 
 for f in TRACKED:
-    if f in CREDENTIAL_FIXTURES:
-        continue
     txt = read(f)
     for pat, what in SECRETS:
         m = re.search(pat, txt)
         if m:
             add("BLOCKER", f"{what} in {f}:{txt[:m.start()].count(chr(10)) + 1}")
-
-# The exemption is only safe while every exempted path still exists and is
-# still a fixture. A stale entry is a hole nobody remembers opening.
-for f in sorted(CREDENTIAL_FIXTURES):
-    if f not in TRACKED:
-        add("BLOCKER", f"credential-fixture exemption for a file that is not tracked: {f}")
-    elif not f.startswith("evals/compliance/tasks/"):
-        add("BLOCKER", f"credential-fixture exemption outside the harness: {f}")
 
 for f in TRACKED:
     base = os.path.basename(f)

