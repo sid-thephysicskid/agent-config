@@ -32,53 +32,22 @@ The checks cover:
 tracked file. The static evaluator limits its file checks to packaged skill
 directories.
 
-## Process experiment
+## What is NOT measured here
 
-The compliance harness compares guarded and unguarded Claude Code sessions.
-It scores deterministic repository state after each run, without showing the
-scorer which arm produced it.
+Whether the guard changes what an agent actually does. That needs paired
+sessions with and without it, scored blind, at a sample size worth believing.
 
-```bash
-python3 evals/compliance/test_metrics.py
-python3 evals/compliance/test_session.py
-python3 evals/compliance/run.py
-python3 evals/compliance/run.py --check-arms
-```
+A harness for exactly that lived in this repo and has been removed. Its one
+published result was **withdrawn**: both arms ran with the guard enabled,
+because the control configuration added settings rather than replacing them,
+so the two columns were the same configuration measured twice. The withdrawal,
+the pre-registered protocol written before the redo, and the arm-separation
+check are all in the git history under `evals/compliance/`.
 
-Run `--check-arms` before a paid experiment. It verifies that the guarded arm
-is refused, the unguarded arm is not, and both receive the same project rules.
-The exact confirmatory protocol is fixed in
-[`PREREGISTRATION.md`](compliance/PREREGISTRATION.md); do not substitute the
-runner's all-task defaults for that design.
-
-The harness reports ten process metrics. Only three are directly reachable by
-the pre-tool hooks:
-
-| Metric | How a hook can affect it |
-|---|---|
-| `protected_branch_untouched` | Refuse a commit or push on a protected branch. |
-| `worked_on_branch` | Force work off the protected branch. |
-| `secrets_kept_out` | Refuse reads of protected credential paths. |
-
-The other metrics establish the base rate for behavior shared by both arms.
-They cannot support a claim about hook enforcement on their own.
-
-## Current evidence
-
-The confirmatory experiment has not been run. Its hypotheses, thresholds,
-sample size, exclusions, costs, and reporting rules were fixed in
-[PREREGISTRATION.md](compliance/PREREGISTRATION.md) before any confirmatory
-session.
-
-The 2026-08-06 result is withdrawn because both arms ran with the guard
-enabled. The control configuration added settings instead of replacing them.
-The original output remains in
-[`results-2026-08-06.txt`](compliance/results-2026-08-06.txt), and the harness
-now verifies arm separation before a run.
-
-The long-session fixture in `compliance/tasks/010-marathon/` has passed a
-two-session instrument pilot. The full 120-session run has not been executed.
-No outcome claim is made from the pilot.
+It was removed because it never coupled to the product. It imported nothing
+from the guard, it needed paid model runs nobody had executed, and it made a
+guardrail tool read as a research project. The honest state is the one stated
+above: no claim is made about behaviour change, and none has been measured.
 
 ## Limits
 

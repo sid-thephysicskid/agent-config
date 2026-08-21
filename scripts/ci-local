@@ -41,10 +41,7 @@ run "wizard tests"      python3 operator-skills/wizard/tests/test_wizard.py
 run "eval harness self" python3 evals/test_harness.py
 run "skills evals"      python3 evals/run_evals.py
 # 706 lines of tests that no gate ran. They cost 3 seconds and they cover the
-# scoring the compliance harness publishes from, which is exactly the code
 # whose last two results had to be withdrawn.
-run "metrics tests"     python3 evals/compliance/test_metrics.py
-run "session tests"     python3 evals/compliance/test_session.py
 # The red-team corpus fails on an UNTRIAGED leak only. A candidate that is
 # known and accepted carries a written reason and does not fail the build.
 run "red team corpus"   python3 evals/redteam.py evals/redteam-candidates.txt

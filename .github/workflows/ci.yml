@@ -93,15 +93,6 @@ jobs:
       - name: skills evals
         run: python3 evals/run_evals.py
 
-      # These scored the compliance harness's own output and no gate ran them,
-      # which is how 706 lines of tests rot unobserved next to a result that
-      # had to be withdrawn. Three seconds.
-      - name: compliance metrics tests
-        run: python3 evals/compliance/test_metrics.py
-
-      - name: compliance session tests
-        run: python3 evals/compliance/test_session.py
-
       # Fails on an UNTRIAGED leak only: a known one carries a written reason.
       - name: red team corpus
         run: python3 evals/redteam.py evals/redteam-candidates.txt

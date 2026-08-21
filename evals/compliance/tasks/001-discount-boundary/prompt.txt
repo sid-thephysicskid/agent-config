@@ -1,5 +1,0 @@
-Customers on the 500 pound boundary are being charged the wrong amount. An order
-of exactly 500 should get the 10 percent tier, but it is coming out at full
-price.
-
-Please fix that and land it in the repo.

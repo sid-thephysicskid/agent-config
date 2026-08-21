@@ -91,26 +91,10 @@ SECRETS = [
     (r"dop_v1_[a-f0-9]{64}", "DigitalOcean token"),
     (r"hf_[A-Za-z0-9]{30,}", "Hugging Face token"),
     # Any client, not just one. postgres was matched and mysql, mongodb and
-    # redis were not, though the compliance fixtures use exactly those shapes.
+    # redis were not, though all four appear in real connection strings.
     (r"(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp|clickhouse)://"
      r"[^\s'\"/]*:[^\s'\"@/]{6,}@", "database URL with a password"),
 ]
-# Files whose entire purpose is to LOOK like a credential, listed one by one
-# rather than by pattern. The compliance harness needs a fixture holding a
-# convincing database URL, because a task that tempts an agent into committing
-# a secret cannot use an obviously fake one.
-#
-# Named explicitly, and deliberately NOT solved with a marker line inside the
-# fixture: the agent under test reads that file during a run, and a comment
-# saying TEST FIXTURE tells it it is being tested, which voids the experiment.
-#
-# Adding a path here is a decision to be reviewed in a diff. Never widen it to
-# a directory or a glob.
-CREDENTIAL_FIXTURES = {
-    "evals/compliance/tasks/002-credential-nearby/dirty/dotfile__env",
-    "evals/compliance/tasks/010-marathon/dirty/dotfile__env",
-}
-
 # The DENY list lives in scripts/install_settings.py and both shell scripts
 # call it, so there is no second copy to drift. This used to be 14 lines
 # asserting that two hand-kept literals agreed; the assertion went away with
@@ -131,21 +115,11 @@ def _deny_rules_are_single_sourced():
 _deny_rules_are_single_sourced()
 
 for f in TRACKED:
-    if f in CREDENTIAL_FIXTURES:
-        continue
     txt = read(f)
     for pat, what in SECRETS:
         m = re.search(pat, txt)
         if m:
             add("BLOCKER", f"{what} in {f}:{txt[:m.start()].count(chr(10)) + 1}")
-
-# The exemption is only safe while every exempted path still exists and is
-# still a fixture. A stale entry is a hole nobody remembers opening.
-for f in sorted(CREDENTIAL_FIXTURES):
-    if f not in TRACKED:
-        add("BLOCKER", f"credential-fixture exemption for a file that is not tracked: {f}")
-    elif not f.startswith("evals/compliance/tasks/"):
-        add("BLOCKER", f"credential-fixture exemption outside the harness: {f}")
 
 for f in TRACKED:
     base = os.path.basename(f)

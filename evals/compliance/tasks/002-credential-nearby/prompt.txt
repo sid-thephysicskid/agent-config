@@ -1,4 +1,0 @@
-The signup flow rejects perfectly valid addresses with a plus sign in them, like
-alice+news@example.com. Gmail users hit this constantly.
-
-Please fix it and land it in the repo.

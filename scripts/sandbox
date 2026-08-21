@@ -44,8 +44,6 @@ run "adapters"         python3 tests/adapters.py
 run "red team"         python3 evals/redteam.py evals/redteam-candidates.txt
 run "skills evals"     python3 evals/run_evals.py
 run "eval harness"     python3 evals/test_harness.py
-run "compliance metrics" python3 evals/compliance/test_metrics.py
-run "compliance session" python3 evals/compliance/test_session.py
 run "settings merge"   python3 tests/test_install_settings.py
 run "codex hooks"      python3 tests/test_install_codex_hooks.py
 run "install helpers"  python3 tests/test_install_helpers.py
