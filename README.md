@@ -1,7 +1,16 @@
 # agent-config
 
-One install gives Claude Code and Codex the same software-delivery workflow and
-blocks common destructive mistakes.
+Deterministic pre-tool hooks that refuse the destructive mistakes an agent
+makes while trying to help, plus focused workflow skills for Claude Code and
+Codex.
+
+It is a safety net, not a security boundary, and it says so everywhere:
+[what it refuses](docs/guard-coverage.md) is generated from the rules,
+[what it deliberately does not catch](evals/redteam-candidates.txt) is written
+down with reasons, and it fails open rather than blocking your agent when it
+breaks. 1,593 test cases, every rule pinned in both directions, and a check
+that proves the guard still decides on your machine rather than that it is
+merely installed.
 
 ## Install
 
@@ -116,6 +125,20 @@ The guardrails install on their own, with no skills and no instruction files:
 ```bash
 npx @sid-thephysicskid/agent-config@latest install guard
 ```
+
+## When the guard is wrong
+
+It will be, sometimes. A guard that cries wolf gets switched off, so a refusal
+of ordinary work is treated as a defect here, not as the cost of doing business.
+
+- **Right now**: the block message names an alternative that does the same job.
+  If it does not, that itself is the bug.
+- **Protected branches**: set `AGENT_GUARD_PROTECTED_BRANCHES` in your shell
+  profile. A comma-separated list replaces the default, and an empty value
+  turns the branch rules off. `doctor` reports it so you cannot forget.
+- **Then**: open an issue with the exact command. Every rule in this repo has
+  to carry a paired case for the nearest legitimate command it must not refuse,
+  so a false positive is a missing case and it will be treated as one.
 
 ## Optional extras
 

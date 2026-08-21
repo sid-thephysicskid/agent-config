@@ -69,4 +69,17 @@ sys.exit(0 if s in t else 1)'; then
   fail=1
 fi
 
+# The README's case count is a user-facing claim about how well tested this is,
+# so it is derived rather than remembered. Every other number in that paragraph
+# is a link to a generated file.
+if ! python3 -c 'import io,sys
+sys.path.insert(0,"hooks")
+import cases
+n=len(cases.CMD_CASES)+len(cases.PATH_CASES)
+r=io.open("README.md",encoding="utf-8").read()
+sys.exit(0 if "{:,} test cases".format(n) in r else 1)'; then
+  echo "README test-case count does not match hooks/cases.py"
+  fail=1
+fi
+
 exit $fail

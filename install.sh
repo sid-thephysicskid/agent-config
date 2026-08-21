@@ -969,6 +969,15 @@ PROBES
       ok "guard proven live: refuses filesystem, git, credential and database shapes, allows 'git status'"
     fi
   fi
+  # A narrowed or emptied branch list is a legitimate choice and a quiet one,
+  # so say it out loud rather than letting a user forget they made it.
+  if [[ -n "${AGENT_GUARD_PROTECTED_BRANCHES+set}" ]]; then
+    if [[ -z "$AGENT_GUARD_PROTECTED_BRANCHES" ]]; then
+      warn "AGENT_GUARD_PROTECTED_BRANCHES is empty: the protected-branch rules are OFF."
+    else
+      warn "AGENT_GUARD_PROTECTED_BRANCHES is set, so the protected branches are: $AGENT_GUARD_PROTECTED_BRANCHES"
+    fi
+  fi
   # The signal already existed and nothing ever surfaced it. A non-empty log
   # means the guard has gone quiet at least once on this machine.
   if [[ -s "$CLAUDE_ROOT/guard-failopen.log" ]]; then

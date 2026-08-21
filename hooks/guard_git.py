@@ -21,7 +21,22 @@ from guard_parse import (
     tokens,
 )
 
-PROTECTED_BRANCHES = {"main", "master", "trunk", "release", "production", "prod"}
+# Overridable, because the hardcoded list is wrong in both directions for real
+# teams. A solo engineer working on `main` in their own repository had no escape
+# but uninstalling, and a team whose protected branch is `develop` or `staging`
+# got no protection at all.
+#
+# Read from the environment the HOOK runs in, which is the user's session, not
+# a shell an agent spawns: a `export` inside one tool call does not reach the
+# next hook process, so this is a decision the human makes in their profile
+# rather than a switch the agent can flip mid-task. Empty disables the branch
+# rules entirely, which is a choice the user is allowed to make and which
+# `--check` reports so it cannot be forgotten.
+_DEFAULT_PROTECTED = ("main", "master", "trunk", "release", "production", "prod")
+_override = os.environ.get("AGENT_GUARD_PROTECTED_BRANCHES")
+PROTECTED_BRANCHES = (
+    {b.strip() for b in _override.split(",") if b.strip()}
+    if _override is not None else set(_DEFAULT_PROTECTED))
 
 # Shapes this module blocks, spelled loosely enough to be recognised in text
 # that is never parsed into segments: the discarded middle of an oversized
