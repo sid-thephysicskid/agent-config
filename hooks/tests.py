@@ -27,6 +27,40 @@ from fixtures import FEAT, MAIN  # noqa: E402
 REASON_TABLES = ("DESTRUCTIVE_GIT", "DESTRUCTIVE_TOOLS", "PRODUCTION_DEPLOYS")
 
 
+ORDINARY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ordinary.txt")
+
+
+def ordinary_commands():
+    with open(ORDINARY, encoding="utf-8") as fh:
+        return [line.strip() for line in fh
+                if line.strip() and not line.startswith("#")]
+
+
+def test_ordinary_work_is_never_refused():
+    """A day of ordinary commands, none of which may be refused.
+
+    The mirror of THE FLOOR in cases.py. The floor asks what incident a rule is
+    for; this asks what an engineer actually types. Both are written without
+    looking at the implementation, which is the only way either finds anything.
+
+    It exists because the ALLOW cases are REACTIVE. Each one is a command that
+    was already wrongly refused and pinned afterwards, so they cluster around
+    the rules that exist rather than around the work people do. Seven false
+    positives shipped straight past 702 of them, and every one was found by a
+    person typing ordinary commands by hand.
+
+    A failure here needs no further argument. A guard that cries wolf gets
+    switched off, so refusing ordinary work is a defect rather than the cost of
+    doing business.
+    """
+    bad = []
+    for cmd in ordinary_commands():
+        hit = guard_rules.check_command(cmd, FEAT)
+        if hit:
+            bad.append("  REFUSED ordinary work: %s\n      -> %s" % (cmd, hit[0]))
+    return bad
+
+
 def test_every_rule_row_fires_for_some_case():
     """Every row of the three big tables must be the reason SOME case blocked.
 
@@ -357,6 +391,7 @@ def main():
         if got != should:
             fails.append(f"  {'should BLOCK' if should else 'should ALLOW'}: path {path}")
 
+    fails += test_ordinary_work_is_never_refused()
     fails += test_git_call_budget()
     for name in test_every_db_wipe_rule_is_reachable():
         fails.append(f"  DB_WIPE_RULES row {name!r} is unreachable: no command fires it")
@@ -389,7 +424,7 @@ def main():
     # failures without contributing to the total, so `PASS n/n` was a number
     # this suite had made up. A suite that miscounts itself has no business
     # grading anything else.
-    total = (len(CMD_CASES) + len(PATH_CASES)
+    total = (len(CMD_CASES) + len(PATH_CASES) + len(ordinary_commands())
              + len(guard_rules.DB_WIPE_RULES) + len(guard_rules.SEGMENT_RULES)
              + 2 * len(guard_parse.RUNNER_NAMES) + len(OVERSIZE_PROBES)
              + (PERF_ASSERTIONS if perf else 0))

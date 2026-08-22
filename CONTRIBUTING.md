@@ -44,6 +44,13 @@ green.
 
 Every new BLOCK rule needs **two** cases in `hooks/cases.py`: the command it must block, and an ALLOW case for the nearest legitimate command it must not. Without the second one, nothing pins the false-positive direction, and a guard that cries wolf gets switched off.
 
+That pairing only covers the nearest command the rule's author thought of, so
+`hooks/ordinary.txt` covers the ones they did not: a day of real commands, none
+of which may ever be refused. **If the guard refused you while you were doing
+your job, put the command there.** The fix is then a failing gate rather than an
+argument, and a false positive is treated as a defect rather than as the cost of
+doing business.
+
 Verify a new guard, lint rule, or test by introducing a deliberate violation,
 confirming failure, then restoring it.
 
