@@ -36,7 +36,7 @@ class ReleaseMetadataTest(unittest.TestCase):
         # name both traps, so a substring check matches its own explanation.
         directives = "\n".join(line for line in workflow.splitlines()
                                if not line.lstrip().startswith("#"))
-        self.assertIn("registry-url", directives)
+        self.assertNotIn("registry-url", directives)
         self.assertIn("GITHUB_REF_NAME", workflow)
         self.assertIn('require("./package.json").version', workflow)
         self.assertIn("./scripts/gates --full", workflow)
@@ -45,8 +45,8 @@ class ReleaseMetadataTest(unittest.TestCase):
         # the trusted publisher on the package. The token that used to be
         # here expired and took a release with it, and npm is restricting
         # that kind of token anyway. A token reappearing is a regression.
-        self.assertIn("NODE_AUTH_TOKEN", directives)
-        self.assertIn("NPM_TOKEN", directives)
+        self.assertNotIn("NODE_AUTH_TOKEN", directives)
+        self.assertNotIn("NPM_TOKEN", directives)
         # The reminder to remove the secret goes with the secret. What is
         # pinned instead is the permission OIDC needs, because losing that
         # breaks publishing in a way whose error message says 404.
