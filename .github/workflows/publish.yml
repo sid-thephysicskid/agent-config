@@ -21,8 +21,10 @@ jobs:
       - name: Require v<package-version> release tag
         run: test "$GITHUB_REF_NAME" = "v$(node -p 'require("./package.json").version')"
       - run: ./scripts/gates --full
+      # No token. npm authenticates this job by OIDC, against the trusted
+      # publisher configured on the package, which is what `id-token: write`
+      # above is for. The token this used to carry expired and took a release
+      # with it, printing a 404 that actually meant "your login is bad". A
+      # trusted publisher cannot expire, and npm is restricting the old
+      # bypass-2FA tokens anyway.
       - run: npm publish
-        env:
-          # Needed only to create the package. Remove the secret after
-          # configuring this workflow as its trusted OIDC publisher.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

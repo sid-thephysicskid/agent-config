@@ -31,8 +31,16 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertIn('require("./package.json").version', workflow)
         self.assertIn("./scripts/gates --full", workflow)
         self.assertIn("npm publish", workflow)
-        self.assertIn("NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}", workflow)
-        self.assertIn("Remove the secret", workflow)
+        # NO token, deliberately. npm authenticates the job by OIDC against
+        # the trusted publisher on the package. The token that used to be
+        # here expired and took a release with it, and npm is restricting
+        # that kind of token anyway. A token reappearing is a regression.
+        self.assertNotIn("NODE_AUTH_TOKEN", workflow)
+        self.assertNotIn("NPM_TOKEN", workflow)
+        # The reminder to remove the secret goes with the secret. What is
+        # pinned instead is the permission OIDC needs, because losing that
+        # breaks publishing in a way whose error message says 404.
+        self.assertIn("id-token: write", workflow)
 
     def test_bootstrap_and_setup_own_the_project_contract(self):
         with open(os.path.join(ROOT, "skills", "bootstrap", "SKILL.md")) as fh:
