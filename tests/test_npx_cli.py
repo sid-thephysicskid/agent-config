@@ -16,6 +16,19 @@ CLI = os.path.join(ROOT, "bin", "agent-config.js")
 VERSION = open(os.path.join(ROOT, "VERSION")).read().strip()
 
 
+def packed(stdout):
+    """The one package `npm pack --json` describes, whatever shape it used.
+
+    npm 10 returns a LIST of packed packages; npm 11 returns an object keyed by
+    name. Indexing [0] worked until the runner's npm moved, and then a release
+    failed on a test about tarball contents rather than on anything real.
+    """
+    data = json.loads(stdout)
+    if isinstance(data, dict):
+        data = list(data.values())
+    return data[0]
+
+
 class NpxCliTest(unittest.TestCase):
     def run_cli(self, home, *args, cwd=None, check=True):
         env = dict(os.environ, HOME=home, PYTHONDONTWRITEBYTECODE="1")
@@ -78,7 +91,7 @@ class NpxCliTest(unittest.TestCase):
             capture_output=True,
             check=True,
         )
-        files = {entry["path"] for entry in json.loads(result.stdout)[0]["files"]}
+        files = {entry["path"] for entry in packed(result.stdout)["files"]}
         self.assertIn("bin/agent-config.js", files)
         self.assertIn("hooks/guard-bash.py", files)
         self.assertIn("skills/ship/SKILL.md", files)
@@ -102,7 +115,7 @@ class NpxCliTest(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            tarball = os.path.join(directory, json.loads(result.stdout)[0]["filename"])
+            tarball = os.path.join(directory, packed(result.stdout)["filename"])
             home = os.path.join(directory, "home")
             os.mkdir(home)
             env = dict(os.environ, HOME=home,
@@ -128,7 +141,7 @@ class NpxCliTest(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            tarball = os.path.join(directory, json.loads(result.stdout)[0]["filename"])
+            tarball = os.path.join(directory, packed(result.stdout)["filename"])
             home = os.path.join(directory, "home")
             os.mkdir(home)
             os.makedirs(os.path.join(home, ".claude", "skills", "review"))
