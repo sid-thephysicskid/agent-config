@@ -372,7 +372,16 @@ def check_deploy(seg):
     return None
 
 
+# `--help` prints usage and does nothing else. Reading the usage of a dangerous
+# command is how you learn to use it safely, and refusing that teaches the agent
+# the tool is untouchable rather than that the ACT is. Long form only: `-h` is
+# the host flag for every database client.
+HELP_ONLY = re.compile(r"(^|\s)--help(\s|$)")
+
+
 def check_tools(seg):
+    if HELP_ONLY.search(seg):
+        return None
     hit = check_deploy(seg)
     if hit:
         return hit

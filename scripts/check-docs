@@ -74,8 +74,8 @@ fi
 # is a link to a generated file.
 if ! python3 -c 'import io,sys
 sys.path.insert(0,"hooks")
-import cases
-n=len(cases.CMD_CASES)+len(cases.PATH_CASES)
+import cases,tests
+n=len(cases.CMD_CASES)+len(cases.PATH_CASES)+len(tests.ordinary_commands())
 r=io.open("README.md",encoding="utf-8").read()
 sys.exit(0 if "{:,} test cases".format(n) in r else 1)'; then
   echo "README test-case count does not match hooks/cases.py"
