@@ -2,49 +2,33 @@
 
 ## Who this is defending against
 
-A careless agent, not an adversary. The guard reads one tool call at a time and
-decides from the text of that call, immediately before it runs.
+A careless agent, not an adversary. The guard reads one tool call at a time, immediately before it runs.
 
-It is **not a security boundary**. It fails open on internal errors and on
-analysis timeouts, a determined human or model can work around it, and it can
-only see commands that arrive as tool calls. Deliberate obfuscation is out of
-scope by design: encoding a command, hiding the verb in a variable, or handing
-it to a remote host are all accepted gaps rather than defects. They are
-enumerated with reasons in [`tests/redteam-candidates.txt`](../tests/redteam-candidates.txt).
+- Not a security boundary. It fails open on internal errors and analysis timeouts.
+- Deliberate obfuscation is out of scope: encoding a command, hiding the verb in a variable, running it on a remote host. Accepted gaps are listed with reasons in [`tests/redteam-candidates.txt`](../tests/redteam-candidates.txt).
+- Keep branch protection, least-privilege credentials, database roles, backups, CI, and review.
 
-What it is for is the mistake an agent makes while trying to help: committing to
-a protected branch, force-pushing over someone's work, deleting the wrong tree,
-reading a real credential, wiping a database it thought was local.
-
-Keep branch protection, least-privilege credentials, database roles, backups,
-CI, and human review. Those are the controls. This is a seatbelt.
-
-## Matched by pattern rather than by table
-
-These are too shape-dependent to enumerate, so they name the module that owns
-them instead of pretending to a completeness they cannot have.
+## Matched by pattern
 
 | Category | Owner |
 |---|---|
-| Commits and pushes on a protected branch, by any verb that writes history | `hooks/guard_git.py` |
 | Force pushes, including the leading-plus refspec and an unpinned lease | `hooks/guard_git.py` |
+| Deleting a protected branch, or moving it with `branch -f` or `checkout -B` | `hooks/guard_git.py` |
+| Plain commits, merges, and pushes on a protected branch, only with `AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1` | `hooks/guard_git.py` |
 | Discarding the working tree: reset, clean, checkout, restore, stash drop | `hooks/guard_git.py` |
 | Reading, copying, printing or uploading a real credential or key | `hooks/guard_secrets.py` |
-| Writing to a file that grants control: hooks, settings, git plumbing | `hooks/guard_paths.py` |
+| A known key format pasted into a prompt | `hooks/guard-prompt.py` |
+| Writing to the guard's own files, or removing its hook entries from settings | `hooks/guard_paths.py` |
+| Writing into git plumbing: `.git/config`, `.git/hooks`, refs | `hooks/guard_paths.py` |
 | Connecting to a host that looks like production | `hooks/guard_db.py` |
 | Unqualified or tautological DELETE and UPDATE, DROP and TRUNCATE | `hooks/guard_db.py` |
 | A program passed inline to an interpreter that deletes or reads secrets | `hooks/guard_rules.py` |
 
-## How well it holds
+## Tests
 
-`tests/rules.py` runs every case in both the string and argv forms a host can
-deliver. Its corpus has two halves: cases written against the rules, and a
-block written against the JOB, chosen by asking what incident a rule is for
-without looking at the implementation.
-
-An accepted gap is not a defect. It is a shape someone tried, decided was out of
-scope, and wrote down, so the next person does not have to rediscover the
-argument. Read them before reporting a bypass.
+- `tests/cases.py`: block and allow cases, each run by `tests/rules.py` in both string and argv form.
+- `tests/ordinary.txt`: everyday commands that must never be refused.
+- `tests/redteam-candidates.txt`: bypass attempts, each blocked or triaged as an accepted gap.
 
 <!-- BEGIN GENERATED: scripts/guard-coverage -->
 
