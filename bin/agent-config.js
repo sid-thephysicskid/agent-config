@@ -169,7 +169,10 @@ const commands = {
   async secret(args) {
     let name; let file; let github = false; let repo;
     for (let i = 0; i < args.length; i += 1) {
-      if (args[i] === "--env" && args[i + 1]) file = args[++i];
+      if (args[i] === "--env") {
+        if (!args[i + 1] || args[i + 1].startsWith("-")) fail("--env needs a file path.");
+        file = args[++i];
+      }
       else if (args[i] === "--github") {
         github = true;
         if (/^[\w.-]+\/[\w.-]+$/.test(args[i + 1] ?? "")) repo = args[++i];
@@ -179,10 +182,13 @@ const commands = {
     if (!/^[A-Z_][A-Z0-9_]*$/.test(name ?? "")) {
       fail("usage: agent-config secret NAME [--env FILE] [--github [OWNER/REPO]], NAME like OPENAI_API_KEY");
     }
+    const toEnv = file || !github;
+    if (file && !existsSync(dirname(resolve(file)))) fail(`${dirname(file)}/ does not exist.`);
     const value = await readValue(name);
     if (!value) fail("no value entered. Nothing was written.");
+    if (toEnv && /[\r\n]/.test(value)) fail("the value has a line break, which .env cannot hold. Nothing was written.");
     if (github) setGithubSecret(name, value, repo);
-    if (file || !github) writeEnv(file ?? ".env", name, value);
+    if (toEnv) writeEnv(file ?? ".env", name, value);
   },
 };
 

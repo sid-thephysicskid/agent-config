@@ -65,6 +65,17 @@ class SecretCliTest(unittest.TestCase):
         self.assertNotEqual(self.secret("API_KEY", value="\n").returncode, 0)
         self.assertEqual(os.listdir(self.dir), [])
 
+    def test_refuses_a_bad_env_path_or_a_multiline_value_writing_nothing(self):
+        for args, value, message in (
+                (("API_KEY", "--env", "sub/.env"), VALUE, "agent-config: sub/ does not exist.\n"),
+                (("API_KEY", "--env"), VALUE, "agent-config: --env needs a file path.\n"),
+                (("API_KEY",), "a\nb\n", "agent-config: the value has a line break, which .env cannot hold. "
+                                          "Nothing was written.\n")):
+            with self.subTest(args):
+                result = self.secret(*args, value=value)
+                self.assertEqual((result.returncode, result.stderr), (1, message))
+        self.assertEqual(os.listdir(self.dir), [])
+
     def test_warns_when_env_is_not_gitignored(self):
         subprocess.run(["git", "init", "-q", self.dir], check=True)
         self.assertIn("not gitignored", self.secret("API_KEY").stderr)
