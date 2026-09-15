@@ -8,7 +8,7 @@ This is a hook that stops that stuff before it runs. Everything else goes throug
 npx @sid-thephysicskid/agent-config@latest install
 ```
 
-Claude Code and Codex. macOS or Linux, Node 20+, Python 3.9+. No network, no model calls, no dependencies.
+Claude Code and Codex. macOS or Linux, Node 20+, Python 3.9+. The hooks make no network or model calls. No dependencies.
 
 ## What it stops
 
