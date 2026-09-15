@@ -5,7 +5,6 @@
     install_settings.py check <path> <hook dir>   exit 1 unless wired
     install_settings.py strip <path>              remove exactly what merge added
     install_settings.py validate <path>           exit 1 on a shape merge would guess about
-    install_settings.py deny                      print the deny rules
 
 Python 3.9, stdlib only.
 """
@@ -197,11 +196,6 @@ def strip(path):
     state = _deny_state_path(path)
     managed = set(_load_managed_denies(path))
     changed = _remove_ours(cfg)
-    orphaned = [r for r in cfg.get("permissions", {}).get("deny", [])
-                if r in DENY and r not in managed]
-    if orphaned and changed:
-        sys.stderr.write("left %d deny rule(s) in %s: no ownership record, so they may be yours.\n"
-                         % (len(orphaned), path))
     perms = cfg.get("permissions", {})
     if managed and isinstance(perms.get("deny"), list):
         perms["deny"] = [r for r in perms["deny"] if r not in managed]
@@ -245,9 +239,6 @@ def check(path, hook_dir):
 
 def main(argv):
     action = argv[1] if len(argv) > 1 else ""
-    if action == "deny" and len(argv) == 2:
-        print("\n".join(DENY))
-        return 0
     if action == "merge" and len(argv) == 4:
         merge(argv[2], argv[3])
         return 0

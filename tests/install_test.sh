@@ -72,6 +72,19 @@ chk "hooks.json byte-identical" "$(yes_no cmp -s "$H/.codex/hooks.json" "$S/code
 chk "their hook script kept" "$(ls "$H/.claude/hooks")" my-guard.py
 chk "no litter" "$(ls -A "$H/.claude" "$H/.codex" | tr '\n' ' ')" "$H/.claude: hooks settings.json  $H/.codex: hooks.json "
 
+echo "== uninstall warns about a kept backup only when the file really changed"
+home changed
+printf '{"model":"opus"}\n' > "$H/.claude/settings.json"
+chk "install exits 0" "$(install)" 0
+cp "$H/.claude/settings.json.before-agent-config" "$H/.claude/settings.json"
+chk "uninstall exits 0" "$(uninstall)" 0
+chk "no warning for an unchanged file" "$(grep -c 'kept ' "$S/out")" 0
+chk "identical backup removed" "$(yes_no test -e "$H/.claude/settings.json.before-agent-config")" no
+chk "install exits 0" "$(install)" 0
+python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); c.update(hooks={}, theme="dark"); json.dump(c, open(sys.argv[1], "w"))' "$H/.claude/settings.json"
+chk "uninstall exits 0" "$(uninstall)" 0
+chk "warns for a changed file" "$(grep -c 'kept .*settings.json.before-agent-config' "$S/out")" 1
+
 echo "== uninstall on a never-installed HOME changes nothing"
 home never
 printf '%s\n' "$USER_SETTINGS" > "$H/.claude/settings.json"

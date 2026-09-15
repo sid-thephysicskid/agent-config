@@ -41,8 +41,8 @@ rmdir "$C/hooks/__pycache__" "$C/hooks" 2>/dev/null || true
 ok "removed the guard links from $C/hooks"
 
 for f in "$C/settings.json" "$X/hooks.json"; do
-  if [[ -e "$f.before-agent-config" ]]; then
-    warn "kept $f.before-agent-config: the file changed after install, so it was not restored"
-  fi
+  b="$f.before-agent-config"
+  [[ -e "$b" ]] || continue
+  if cmp -s "$f" "$b"; then rm -f "$b"; else warn "kept $b: $f changed after install, so it was not restored"; fi
 done
 echo "Done. Start a new agent session."

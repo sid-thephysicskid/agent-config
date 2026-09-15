@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """settings.json merge, strip, and validation. Python 3.9, stdlib only."""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -146,6 +148,15 @@ class StripTest(Base):
         self.write(cfg)
         S.strip(self.path)
         self.assertEqual(self.read(), {"permissions": {"deny": ["Bash(git reset --hard:*)"]}, "theme": "dark"})
+
+    def test_says_nothing_about_deny_rules_the_user_already_had(self):
+        self.write({"permissions": {"deny": ["Read(**/.env)"]}})
+        S.merge(self.path, HOOKS)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            S.strip(self.path)
+        self.assertEqual(err.getvalue(), "")
+        self.assertEqual(self.read(), {"permissions": {"deny": ["Read(**/.env)"]}})
 
     def test_a_file_we_created_is_removed(self):
         S.merge(self.path, HOOKS)

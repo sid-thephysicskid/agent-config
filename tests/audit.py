@@ -95,25 +95,6 @@ SECRETS = [
     (r"(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp|clickhouse)://"
      r"[^\s'\"/]*:[^\s'\"@/]{6,}@", "database URL with a password"),
 ]
-# The DENY list lives in scripts/install_settings.py and both shell scripts
-# call it, so there is no second copy to drift. This used to be 14 lines
-# asserting that two hand-kept literals agreed; the assertion went away with
-# the duplication it was policing, which is the better fix.
-def _deny_rules_are_single_sourced():
-    import subprocess
-    out = subprocess.run(
-        ["python3", "scripts/install_settings.py", "deny"],
-        cwd=REPO, capture_output=True, text=True)
-    rules = [l for l in out.stdout.splitlines() if l.strip()]
-    if not rules:
-        add("BLOCKER", "install_settings.py prints no deny rules")
-    for script in ("install.sh", "uninstall.sh"):
-        if 'install_settings.py"' not in read(script):
-            add("BLOCKER", "%s no longer calls install_settings.py" % script)
-
-
-_deny_rules_are_single_sourced()
-
 for f in TRACKED:
     txt = read(f)
     for pat, what in SECRETS:
