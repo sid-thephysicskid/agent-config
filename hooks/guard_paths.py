@@ -133,5 +133,5 @@ def check_control_path(p, shown=None, change=None):
                 "and tell the human rather than editing the installed copy")
     if kind == "config" and _drops_guard_hooks(p, change):
         return (f"write to '{shown}' that could remove the guard's own hook entries.",
-                "use Edit on the setting you mean and leave the guard's hook entries in place")
+                "change only the setting you mean and keep the guard's hook entries")
     return None
