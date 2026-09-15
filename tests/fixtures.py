@@ -56,7 +56,8 @@ def mkdetached():
 NOREPO = tempfile.mkdtemp()          # a real directory that is NOT a repo
 # A settings file with the guard wired in, for Write cases that compare against disk.
 SETTINGS = os.path.join(NOREPO, ".claude", "settings.json")
-SETTINGS_BODY = '{"model": "sonnet", "hooks": {"PreToolUse": [{"hooks": [{"command": "python3 ~/.claude/hooks/guard-bash.py"}]}]}}'
+SETTINGS_BODY = ('{"model": "sonnet", "hooks": {"PreToolUse": [{"hooks": [{"command": "python3 ~/.claude/hooks/guard-bash.py"}]}], '
+                 '"UserPromptSubmit": [{"hooks": [{"command": "python3 ~/.claude/hooks/guard-prompt.py"}]}]}}')
 os.makedirs(os.path.dirname(SETTINGS))
 open(SETTINGS, "w").write(SETTINGS_BODY)
 MAIN = mkrepo("main")
