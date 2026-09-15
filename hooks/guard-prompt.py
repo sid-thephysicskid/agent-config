@@ -8,7 +8,9 @@ import json
 import os
 import re
 import sys
-import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from guard_adapter import log  # noqa: E402
 
 # One regex per kind and no leading \b: a literal prefix lets re skip ahead, 10x faster on 200KB.
 KINDS = [(kind, re.compile(pattern, re.ASCII)) for kind, pattern in (
@@ -34,15 +36,8 @@ def main():
         kind = next((kind for kind, pattern in KINDS
                      if any(real(m.group()) for m in pattern.finditer(prompt))), None)
     except Exception as error:  # noqa: BLE001
-        try:
-            os.makedirs(os.path.expanduser("~/.claude"), exist_ok=True)
-            # The type only: the payload may hold the very secret we look for.
-            with os.fdopen(os.open(os.path.expanduser("~/.claude/guard-failopen.log"),
-                                   os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600), "a") as log:
-                log.write("%s guard-prompt failed open: %s\n"
-                          % (time.strftime("%Y-%m-%d %H:%M:%S"), type(error).__name__))
-        except Exception:  # noqa: BLE001
-            pass
+        # The type only: the payload may hold the very secret we look for.
+        log("guard-prompt failed open", type(error).__name__)
         sys.exit(0)
     if kind:
         sys.stderr.write(

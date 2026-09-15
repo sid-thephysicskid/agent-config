@@ -106,6 +106,10 @@ chk "Claude settings in custom dir" "$(grep -c 'agent-config-hook-v1' "$S/cc/set
 chk "Codex hooks in custom dir" "$(grep -c 'guard-codex.py' "$S/cx/hooks.json")" 1
 chk "default dirs untouched" "$(ls -A "$H/.claude" "$H/.codex" | tr '\n' ' ')" "$H/.claude:  $H/.codex: "
 chk "check exits 0" "$(install --check)" 0
+echo x > "$S/cc/guard-failopen.log"
+install --check >/dev/null
+chk "fail-open log read from custom dir" "$(grep -c "$S/cc/guard-failopen.log is not empty" "$S/out")" 1
+rm "$S/cc/guard-failopen.log"
 chk "uninstall exits 0" "$(uninstall)" 0
 chk "custom dirs emptied" "$(ls -A "$S/cc" "$S/cx" | tr '\n' ' ')" "$S/cc:  $S/cx: "
 unset CLAUDE_CONFIG_DIR CODEX_HOME

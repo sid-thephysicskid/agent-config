@@ -111,8 +111,8 @@ done
 if [[ -n "${AGENT_CONFIG_PROTECTED_BRANCHES+set}" ]]; then
   warn "AGENT_CONFIG_PROTECTED_BRANCHES is set: protected branches are '$AGENT_CONFIG_PROTECTED_BRANCHES'"
 fi
-if [[ -s "$HOME/.claude/guard-failopen.log" ]]; then
-  warn "$HOME/.claude/guard-failopen.log is not empty: the guard has failed open before."
+if [[ -s "$C/guard-failopen.log" ]]; then
+  warn "$C/guard-failopen.log is not empty: the guard has failed open before."
 fi
 
 if (( PROBLEMS )); then

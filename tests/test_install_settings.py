@@ -40,7 +40,7 @@ class MergeTest(Base):
         S.merge(self.path, HOOKS)
         first = self.read()
         self.assertEqual(len(self.commands(first)), len(S.WIRING))
-        self.assertEqual(first["permissions"]["deny"], list(S.DENY))
+        self.assertEqual(first["permissions"]["deny"], list(S.deny_rules(HOOKS)))
         S.merge(self.path, HOOKS)
         self.assertEqual(self.read(), first)
         self.assertTrue(S.check(self.path, HOOKS))
@@ -72,6 +72,14 @@ class MergeTest(Base):
         cmds = self.commands()
         self.assertEqual(len(cmds), len(S.WIRING))
         self.assertNotIn("Stop", self.read()["hooks"])
+
+    def test_the_hooks_deny_rule_follows_the_hook_dir(self):
+        home = os.path.expanduser("~")
+        self.assertEqual(S.deny_rules(home + "/.claude/hooks")[-1], "Write(~/.claude/hooks/**)")
+        self.assertEqual(S.deny_rules("/srv/cc/hooks")[-1], "Write(//srv/cc/hooks/**)")
+        S.merge(self.path, "/srv/cc/hooks")
+        S.strip(self.path)
+        self.assertEqual(os.listdir(self.dir.name), [])
 
     def test_updates_a_symlink_target_without_detaching_it(self):
         target = os.path.join(self.dir.name, "dots.json")

@@ -89,6 +89,13 @@ class PromptGuardTest(unittest.TestCase):
             text = log.read()
         self.assertNotIn(POSITIVES["GitHub token"], text)
 
+    def test_the_fail_open_log_follows_claude_config_dir(self):
+        config = os.path.join(self.home.name, "cc")
+        subprocess.run([sys.executable, HOOK], input="[1]", capture_output=True, text=True,
+                       env=dict(os.environ, HOME=self.home.name, CLAUDE_CONFIG_DIR=config))
+        self.assertTrue(os.path.exists(os.path.join(config, "guard-failopen.log")))
+        self.assertFalse(os.path.exists(os.path.join(self.home.name, ".claude")))
+
     def test_a_200kb_prompt_is_judged_in_under_50ms(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("guard_prompt", HOOK)

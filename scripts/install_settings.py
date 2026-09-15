@@ -28,8 +28,8 @@ DENY = (
     "Read(**/id_ed25519)",
     "Read(**/.pgpass)",
     "Read(**/.netrc)",
-    "Write(~/.claude/hooks/**)",
 )
+_HOOKS_DENY = re.compile(r"^Write\(.+/\*\*\)$")
 
 WIRING = (
     ("PreToolUse", "Bash", "guard-bash.py", 5),
@@ -49,6 +49,13 @@ _OUR_SHAPE = re.compile(
 _OURS = re.compile(
     r"python3?\s+\S*[./]claude/hooks/"
     r"(guard-(bash|files)|check-docs|welcome)\.py(\s|;|$)")
+
+
+def deny_rules(hook_dir):
+    # Permission paths: ~/ is home, // is absolute.
+    home = os.path.expanduser("~") + "/"
+    where = "~/" + hook_dir[len(home):] if hook_dir.startswith(home) else "/" + hook_dir
+    return DENY + ("Write(%s/**)" % where.rstrip("/"),)
 
 
 def _cmd(script, hook_dir):
@@ -109,7 +116,7 @@ def _load_managed_denies(path):
         raise ValueError("managed deny state is not a regular file")
     with open(state) as f:
         managed = json.load(f)
-    if not isinstance(managed, list) or any(rule not in DENY for rule in managed):
+    if not isinstance(managed, list) or any(rule not in DENY and not _HOOKS_DENY.match(str(rule)) for rule in managed):
         raise ValueError("managed deny state is invalid")
     return managed
 
@@ -172,7 +179,7 @@ def merge(path, hook_dir):
         entry["hooks"].append(
             {"type": "command", "command": _cmd(script, hook_dir), "timeout": timeout})
     deny = cfg.setdefault("permissions", {}).setdefault("deny", [])
-    for rule in DENY:
+    for rule in deny_rules(hook_dir):
         if rule not in deny:
             deny.append(rule)
             if rule not in managed:
