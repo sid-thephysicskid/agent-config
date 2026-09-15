@@ -19,6 +19,7 @@ home() { H="$S/$1"; mkdir -p "$H/.claude" "$H/.codex"; }
 ours() { find "$H" -type l -lname "$1*" | wc -l | tr -d ' '; }
 USER_SETTINGS='{"model":"opus","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"python3 ~/mine/wrap.py --after hooks/guard-files.py"}]}]}}'
 USER_CODEX='{"description":"mine","hooks":{"Stop":[{"hooks":[{"type":"command","command":"python3 ~/mine/stop.py"}]}]}}'
+USER_CURSOR='{"version":1,"hooks":{"stop":[{"command":"./hooks/mine.sh"}]},"theirs":true}'
 
 echo "== fresh install wires both hosts and proves the guard decides"
 home fresh
@@ -27,6 +28,7 @@ chk "three Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.
 chk "one Codex hook" "$(grep -c 'guard-codex.py' "$H/.codex/hooks.json")" 1
 chk "one Codex prompt hook" "$(grep -c 'guard-prompt.py' "$H/.codex/hooks.json")" 1
 chk "guard linked" "$(readlink "$H/.claude/hooks/guard-bash.py")" "$S/repo/hooks/guard-bash.py"
+chk "no Cursor dir means nothing written" "$(yes_no test -e "$H/.cursor")" no
 chk "no instruction files" "$(yes_no test -e "$H/.claude/CLAUDE.md" -o -e "$H/.codex/AGENTS.md")" no
 chk "check exits 0" "$(install --check)" 0
 chk "unknown flag refused" "$(install --dry-run)" 1
@@ -71,6 +73,44 @@ chk "settings.json byte-identical" "$(yes_no cmp -s "$H/.claude/settings.json" "
 chk "hooks.json byte-identical" "$(yes_no cmp -s "$H/.codex/hooks.json" "$S/codex.orig")" yes
 chk "their hook script kept" "$(ls "$H/.claude/hooks")" my-guard.py
 chk "no litter" "$(ls -A "$H/.claude" "$H/.codex" | tr '\n' ' ')" "$H/.claude: hooks settings.json  $H/.codex: hooks.json "
+
+echo "== Cursor is wired when ~/.cursor exists, decides end to end, and uninstalls byte-identical"
+home cursor; mkdir -p "$H/.cursor"
+printf '%s\n' "$USER_CURSOR" > "$H/.cursor/hooks.json"; cp "$H/.cursor/hooks.json" "$S/cursor.orig"
+for _ in 1 2; do chk "install exits 0" "$(install)" 0; done
+chk "one Cursor tool hook" "$(grep -c 'guard-cursor.py' "$H/.cursor/hooks.json")" 1
+chk "one Cursor prompt hook" "$(grep -c 'guard-prompt.py' "$H/.cursor/hooks.json")" 1
+chk "their Cursor hook kept" "$(grep -c 'mine.sh' "$H/.cursor/hooks.json")" 1
+chk "check exits 0" "$(install --check)" 0
+chk "check probes the Cursor hooks" "$(grep -c 'Cursor hooks refuse' "$S/out")" 1
+ccmd="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["preToolUse"][0]["command"])' "$H/.cursor/hooks.json")"
+cursor_hook() {
+  local out rc=0
+  out="$(printf '{"tool_name":"Shell","tool_input":{"command":"%s","cwd":""},"cwd":"","workspace_roots":["/"]}' "$1" \
+    | (cd "$H/.cursor" && HOME="$H" sh -c "$ccmd") 2>/dev/null)" || rc=$?
+  echo "$rc $out"
+}
+chk "force push denied" "$(cursor_hook 'git push --force origin main' | cut -d, -f1)" '2 {"permission": "deny"'
+chk "git status allowed" "$(cursor_hook 'git status')" '0 {"permission": "allow"}'
+mv "$S/repo/hooks/guard-cursor.py" "$S/cursor.off"
+chk "a missing Cursor hook exits 1, which Cursor allows" "$(cursor_hook 'git push --force origin main')" '1 '
+chk "check notices a Cursor hook that no longer decides" "$(install --check)" 1
+chk "Cursor probe reported" "$(grep -c 'Cursor hook did not refuse' "$S/out")" 1
+mv "$S/cursor.off" "$S/repo/hooks/guard-cursor.py"
+rm "$H/.cursor/hooks.json.before-agent-config"; cp "$S/cursor.orig" "$H/.cursor/hooks.json"
+chk "missing Cursor wiring is caught" "$(install --check)" 1
+chk "reinstall exits 0" "$(install)" 0
+chk "uninstall exits 0" "$(uninstall)" 0
+chk "Cursor hooks.json byte-identical" "$(yes_no cmp -s "$H/.cursor/hooks.json" "$S/cursor.orig")" yes
+chk "no Cursor litter" "$(ls -A "$H/.cursor")" hooks.json
+home cursornew; mkdir -p "$H/.cursor"
+chk "install exits 0" "$(install)" 0
+chk "a created Cursor hooks.json has version 1" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$H/.cursor/hooks.json")" 1
+chk "uninstall exits 0" "$(uninstall)" 0
+chk "created Cursor hooks.json removed" "$(ls -A "$H/.cursor")" ""
+home badcursor; mkdir -p "$H/.cursor"; echo '{"hooks":{"preToolUse":"x"}}' > "$H/.cursor/hooks.json"
+chk "malformed Cursor hooks refused" "$(install)" 1
+chk "Claude side not wired" "$(yes_no test -e "$H/.claude/settings.json")" no
 
 echo "== uninstall warns about a kept backup only when the file really changed"
 home changed

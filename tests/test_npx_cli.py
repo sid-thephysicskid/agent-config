@@ -33,6 +33,7 @@ class NpxCliTest(unittest.TestCase):
             help_text = self.run_cli(home, "--help").stdout
             for command in ("install", "doctor", "uninstall", "secret"):
                 self.assertIn("agent-config " + command, help_text)
+            self.assertIn("Cursor", help_text)
             self.assertNotIn("--extras", help_text)
             self.assertEqual(self.run_cli(home, "--version").stdout.strip(), VERSION)
 
@@ -72,7 +73,7 @@ class NpxCliTest(unittest.TestCase):
         files = {entry["path"] for entry in packed(result.stdout)["files"]}
         for path in ("bin/agent-config.js", "hooks/guard-bash.py", "hooks/guard-prompt.py", "install.sh",
                      "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
-                     "scripts/install_codex_hooks.py", "scripts/migrate-legacy.sh"):
+                     "scripts/install_hooks_json.py", "scripts/migrate-legacy.sh"):
             self.assertIn(path, files)
         for prefix in ("tests/", "docs/"):
             self.assertFalse(any(p.startswith(prefix) for p in files), prefix)
