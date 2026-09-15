@@ -42,7 +42,6 @@ class NpxCliTest(unittest.TestCase):
             self.run_cli(home, "install", "guard")  # the 0.4 spelling still works
             hook = os.path.join(home, ".claude", "hooks", "guard-bash.py")
             self.assertTrue(os.readlink(hook).startswith(stable(home) + os.sep))
-            self.assertFalse(os.path.exists(os.path.join(stable(home), "hooks", "tests.py")))
             self.assertIn("All good", self.run_cli(home, "doctor").stdout)
             os.remove(hook)
             broken = self.run_cli(home, "doctor", check=False)
@@ -75,11 +74,10 @@ class NpxCliTest(unittest.TestCase):
                      "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
                      "scripts/install_codex_hooks.py", "scripts/migrate-legacy.sh"):
             self.assertIn(path, files)
-        for prefix in ("tests/", "evals/", "skills/", "templates/", "docs/"):
+        for prefix in ("tests/", "docs/"):
             self.assertFalse(any(p.startswith(prefix) for p in files), prefix)
         hooks = {os.path.basename(p) for p in files if p.startswith("hooks/")}
-        self.assertEqual(hooks, {n for n in os.listdir(os.path.join(ROOT, "hooks"))
-                                 if n.startswith("guard") and n.endswith(".py")})
+        self.assertEqual(hooks, set(os.listdir(os.path.join(ROOT, "hooks"))) - {"__pycache__"})
         self.assertFalse(files & {"CHANGELOG.md", "AGENTS.md", "SECURITY.md"})
 
     def test_packed_tarball_round_trips_through_npx(self):

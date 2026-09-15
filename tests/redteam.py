@@ -1,44 +1,12 @@
 #!/usr/bin/env python3
-"""Put candidate commands through the live guard and report what got through.
+"""Score candidate commands against the guard, judged on a main-branch fixture.
 
-    python3 evals/redteam.py candidates.txt
-    printf 'git push --force origin main\\n' | python3 evals/redteam.py -
+    python3 tests/redteam.py tests/redteam-candidates.txt
+    printf 'git push --force origin main\\n' | python3 tests/redteam.py -
 
-One command per line. A line starting with `#` is a comment. A line may carry a
-tab and an expectation; the default is BLOCK.
-
-    ALLOW           legitimate work that must NOT be blocked
-    OPEN: <reason>  known to get through, triaged, and accepted for now
-
-Three outcomes, and the third exists because of what this file became:
-
-    LEAKED   should have been refused, was not, and nobody has looked at it
-    OPEN     should have been refused, was not, and someone wrote down why
-    BLOCKED  ordinary work the guard refused, which is how a guard gets
-             switched off, and a switched-off guard protects nothing
-
-**Only LEAKED and BLOCKED fail.** For months this file reported 74 of 98
-leaking and exited non-zero every time, so the number stopped meaning anything
-and nobody triaged it. A corpus that is always red is the same as a corpus that
-is always green: neither tells you whether today is worse than yesterday. An
-OPEN entry has to carry a reason, so the accepted list can be read and argued
-with rather than accumulating in silence.
-
-This is the scoring half. Generating good candidates is the other half and is
-not automated here: an adversarial model is better at inventing phrasings than
-any list I could write down, and the interesting ones came from asking one to
-try. Feed its output in, and put whatever leaks into `hooks/cases.py` so it can
-never leak twice.
-
-Every candidate is judged with cwd = MAIN, a fixture checked out on a
-protected branch. That is deliberate, because most of the corpus is about
-protected-branch rules, but it means a candidate can block for a reason that
-has nothing to do with what it was written to test: `git push --for\\ce` blocks
-on main because it is a push on main, not because the escaped flag was
-recognised. Read a block here as "something refused it", never as "the rule you
-had in mind refused it".
-
-Python 3.9, stdlib only, no network.
+One command per line, `#` for comments. An optional tab-separated expectation:
+BLOCK (default), ALLOW, or OPEN: <reason> for a triaged, accepted gap.
+Fails on a leak, an over-block, or an OPEN entry that now blocks.
 """
 import os
 import sys
@@ -105,13 +73,13 @@ def main(argv):
         print("\nNEWLY CLOSED  %s\n              was OPEN: %s" % (cmd, why or "?"))
 
     if leaked:
-        print("\nAdd each leak to hooks/cases.py with the incident it encodes,")
+        print("\nAdd each leak to tests/cases.py with the incident it encodes,")
         print("then fix the rule. A leak with no case regresses silently.")
         print("If it is not worth fixing, mark it OPEN with a reason, so the")
         print("decision is written down rather than lost in a red number.")
     if closed:
         print("\nA NEWLY CLOSED entry is good news that must not stay OPEN:")
-        print("move it to hooks/cases.py so it cannot reopen unnoticed.")
+        print("move it to tests/cases.py so it cannot reopen unnoticed.")
     return 1 if (leaked or over or closed) else 0
 
 

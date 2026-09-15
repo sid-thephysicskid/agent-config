@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Check [`evals/redteam-candidates.txt`](../../blob/main/evals/redteam-candidates.txt) first; listed gaps are deliberate. For a working bypass, use private vulnerability reporting instead.
+        Check [`tests/redteam-candidates.txt`](../../blob/main/tests/redteam-candidates.txt) first; listed gaps are deliberate. For a working bypass, use private vulnerability reporting instead.
   - type: textarea
     id: command
     attributes:

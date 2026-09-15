@@ -15,7 +15,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "hooks"))
+sys.path[:0] = [os.path.join(ROOT, "hooks"), os.path.join(ROOT, "tests")]
 DOC = os.path.join(ROOT, "docs", "guard-coverage.md")
 BEGIN = "<!-- BEGIN GENERATED: scripts/guard-coverage -->"
 END = "<!-- END GENERATED -->"

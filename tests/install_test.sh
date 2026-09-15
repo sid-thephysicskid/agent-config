@@ -27,7 +27,6 @@ chk "three Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.
 chk "one Codex hook" "$(grep -c 'guard-codex.py' "$H/.codex/hooks.json")" 1
 chk "one Codex prompt hook" "$(grep -c 'guard-prompt.py' "$H/.codex/hooks.json")" 1
 chk "guard linked" "$(readlink "$H/.claude/hooks/guard-bash.py")" "$S/repo/hooks/guard-bash.py"
-chk "tests are not linked" "$(yes_no test -e "$H/.claude/hooks/tests.py")" no
 chk "no instruction files" "$(yes_no test -e "$H/.claude/CLAUDE.md" -o -e "$H/.codex/AGENTS.md")" no
 chk "check exits 0" "$(install --check)" 0
 chk "unknown flag refused" "$(install --dry-run)" 1

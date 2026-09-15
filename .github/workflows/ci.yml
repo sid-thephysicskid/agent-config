@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.13"
       # A hung hook fails open, so these budgets are a safety gate.
-      - run: python3 hooks/tests.py
+      - run: python3 tests/rules.py
 
   installer:
     name: installer

@@ -2072,7 +2072,7 @@ CMD_CASES += [
 # merge.
 #
 # The one thing the old runner asserted that nothing else did was that a
-# command and its argv form agree. hooks/tests.py now asserts that on every
+# command and its argv form agree. tests/rules.py now asserts that on every
 # case here, which is 1,200-odd rather than these 375, and doing so found 66
 # real disagreements.
 # ===========================================================================
@@ -2388,9 +2388,9 @@ CMD_CASES += [
     ('for f in src/*.ts; do npx tsc --noEmit "$f"; done', FEAT, False),
     ('if [ -f .env.example ]; then cp .env.example .env.local.tpl; fi', FEAT, False),
     ('test -d node_modules || npm ci', FEAT, False),
-    ('python3 hooks/tests.py --no-perf', FEAT, False),
+    ('python3 tests/rules.py --no-perf', FEAT, False),
     ('grep -n "DROP TABLE" hooks/guard_rules.py', FEAT, False),
-    ('rg "rm -rf" hooks/tests.py', FEAT, False),
+    ('rg "rm -rf" tests/rules.py', FEAT, False),
     ('git diff hooks/guard_rules.py', FEAT, False),
     ('./install.sh --check', FEAT, False),
     ('bash tests/install_test.sh', FEAT, False),

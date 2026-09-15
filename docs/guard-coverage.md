@@ -10,7 +10,7 @@ analysis timeouts, a determined human or model can work around it, and it can
 only see commands that arrive as tool calls. Deliberate obfuscation is out of
 scope by design: encoding a command, hiding the verb in a variable, or handing
 it to a remote host are all accepted gaps rather than defects. They are
-enumerated with reasons in [`evals/redteam-candidates.txt`](../evals/redteam-candidates.txt).
+enumerated with reasons in [`tests/redteam-candidates.txt`](../tests/redteam-candidates.txt).
 
 What it is for is the mistake an agent makes while trying to help: committing to
 a protected branch, force-pushing over someone's work, deleting the wrong tree,
@@ -37,7 +37,7 @@ them instead of pretending to a completeness they cannot have.
 
 ## How well it holds
 
-`hooks/tests.py` runs every case in both the string and argv forms a host can
+`tests/rules.py` runs every case in both the string and argv forms a host can
 deliver. Its corpus has two halves: cases written against the rules, and a
 block written against the JOB, chosen by asking what incident a rule is for
 without looking at the implementation.
@@ -105,7 +105,7 @@ argument. Read them before reporting a bypass.
 | Measure | Count |
 |---|---|
 | Commands refused | 808 |
-| Ordinary commands allowed | 896 |
+| Ordinary commands allowed | 895 |
 | Path cases | 45 |
 | Red-team candidates leaking untriaged | 0, or CI fails |
 <!-- END GENERATED -->

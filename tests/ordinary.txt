@@ -248,10 +248,9 @@ printf '%s\n' "do not run npm publish by hand" > NOTES.md
 python3 -c "print('the runbook mentions dropdb')"
 
 # ---- the repo's own workflow ----
-python3 hooks/tests.py --no-perf
-python3 evals/redteam.py evals/redteam-candidates.txt
+python3 tests/rules.py --no-perf
+python3 tests/redteam.py tests/redteam-candidates.txt
 ./scripts/gates
-./scripts/check-docs
 bash tests/install_test.sh
 ./install.sh --check
 

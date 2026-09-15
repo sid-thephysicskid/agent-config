@@ -22,7 +22,7 @@
     "VERSION",
     "bin/",
     "hooks/",
-    "!hooks/[!g]*",
+    "!hooks/__pycache__",
     "install.sh",
     "scripts/install_codex_hooks.py",
     "scripts/migrate-legacy.sh",

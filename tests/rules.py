@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for guard_rules.
 
-Run: python3 hooks/tests.py
+Run: python3 tests/rules.py
 
 Every BLOCK case here is a bypass that was found by an adversarial audit and
 must never regress. Every ALLOW case is a legitimate command that was once
@@ -12,7 +12,8 @@ import os
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HOOKS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hooks")
+sys.path.insert(0, HOOKS)
 import guard_git  # noqa: E402
 import guard_parse  # noqa: E402
 import guard_rules  # noqa: E402
@@ -239,7 +240,7 @@ def test_strict_mode():
         guard_git.BLOCK_DIRECT_COMMITS = False
     env = dict(os.environ, AGENT_CONFIG_BLOCK_DIRECT_COMMITS="1")
     out = subprocess.run([sys.executable, "-c", "import guard_git; print(guard_git.BLOCK_DIRECT_COMMITS)"],
-                         cwd=os.path.dirname(os.path.abspath(__file__)), env=env,
+                         cwd=HOOKS, env=env,
                          capture_output=True, text=True).stdout.strip()
     if out != "True":
         bad.append("  AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1 did not turn strict mode on")

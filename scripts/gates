@@ -26,9 +26,9 @@ fi
 
 # name | needs node | command
 GATES=(
-  "rule suite|no|python3 hooks/tests.py --no-perf"
+  "rule suite|no|python3 tests/rules.py --no-perf"
   "adapters|no|python3 tests/adapters.py"
-  "red team|no|python3 evals/redteam.py evals/redteam-candidates.txt"
+  "red team|no|python3 tests/redteam.py tests/redteam-candidates.txt"
   "coverage doc|no|python3 scripts/guard-coverage --check"
   "settings merge|no|python3 tests/test_install_settings.py"
   "codex hooks|no|python3 tests/test_install_codex_hooks.py"
@@ -36,11 +36,11 @@ GATES=(
   "release metadata|no|python3 tests/test_release_metadata.py"
   "credential patterns|no|python3 tests/test_audit_patterns.py"
   "audit|no|python3 tests/audit.py"
-  "python syntax|no|python3 -W error::SyntaxWarning -m compileall -q hooks/ evals/ scripts/ tests/"
+  "python syntax|no|python3 -W error::SyntaxWarning -m compileall -q hooks/ scripts/ tests/"
   "shellcheck|no|bash scripts/shellcheck-if-present"
   "npm CLI|yes|python3 tests/test_npx_cli.py"
 )
-(( PERF )) && GATES+=("DoS budgets|no|python3 hooks/tests.py")
+(( PERF )) && GATES+=("DoS budgets|no|python3 tests/rules.py")
 (( FULL )) && GATES+=("installer suite|no|bash tests/install_test.sh")
 
 pass=0; fail=0; skipped=0
