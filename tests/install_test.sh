@@ -37,7 +37,7 @@ run_hook() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"/"
 chk "rm -rf / blocked" "$(run_hook 'rm -rf /')" 2
 chk "ls allowed" "$(run_hook 'ls')" 0
 pcmd="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"])' "$H/.claude/settings.json")"
-chk "pasted token refused" "$(printf '{"prompt":"gh%s_%036d"}' p 0 | HOME="$H" sh -c "$pcmd" >/dev/null 2>&1; echo $?)" 2
+chk "pasted token refused" "$(printf '{"prompt":"gh%s_%s"}' p "$(printf 'Ab3xQ9%.0s' 1 2 3 4 5 6)" | HOME="$H" sh -c "$pcmd" >/dev/null 2>&1; echo $?)" 2
 mv "$H/.claude/hooks" "$H/hooks.off"
 chk "missing hooks allow" "$(run_hook 'rm -rf /')" 0
 mv "$H/hooks.off" "$H/.claude/hooks"

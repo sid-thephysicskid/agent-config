@@ -102,8 +102,8 @@ else
 fi
 (( PROBLEMS > before )) || ok "the guard refuses destructive commands and allows git status"
 before=$PROBLEMS
-for want in 2:"gh%s_%036d" 0:hello; do
-  [[ "$(printf "{\"prompt\":\"${want#*:}\"}" p 0 | PYTHONDONTWRITEBYTECODE=1 python3 "$C/hooks/guard-prompt.py" >/dev/null 2>&1; echo $?)" == "${want%%:*}" ]] \
+for want in 2:"gh%s_%s" 0:hello; do
+  [[ "$(printf "{\"prompt\":\"${want#*:}\"}" p "$(printf 'Ab3xQ9%.0s' 1 2 3 4 5 6)" | PYTHONDONTWRITEBYTECODE=1 python3 "$C/hooks/guard-prompt.py" >/dev/null 2>&1; echo $?)" == "${want%%:*}" ]] \
     || bad "the prompt guard did not return ${want%%:*} for a ${want#*:} prompt"
 done
 (( PROBLEMS > before )) || ok "the prompt guard refuses a pasted token and allows hello"
