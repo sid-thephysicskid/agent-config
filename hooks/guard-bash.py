@@ -3,12 +3,13 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_adapter import block, field, load_rules, read_payload, verdict  # noqa: E402
+from guard_adapter import block, defer_to_cursor, field, load_rules, read_payload, verdict  # noqa: E402
 
 SHELL_TOOLS = {"bash", "shell", "run_command", "runcommand", "executecommand"}
 
 def main():
     payload = read_payload()
+    defer_to_cursor(payload)
     tool = payload.get("tool_name")
     if not isinstance(tool, str) or tool.strip().lower() not in SHELL_TOOLS:
         sys.exit(0)

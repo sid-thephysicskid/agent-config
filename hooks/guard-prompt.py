@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook for Claude Code and Codex: refuse a prompt that carries a credential.
+"""Prompt hook for Claude Code and Codex (UserPromptSubmit) and Cursor (beforeSubmitPrompt): refuse a prompt that carries a credential.
 
-Exit 2 = refused, reason on stderr. Exit 0 = allowed, and on any internal error.
+Exit 2 = refused, reason on stderr, and for Cursor also on stdout as JSON. Exit 0 = allowed, and on any internal error.
 Patterns follow gitleaks.toml. Python 3.9, stdlib only.
 """
 import json
@@ -29,7 +29,9 @@ def real(key):
 
 def main():
     try:
-        prompt = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace"))["prompt"]
+        payload = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace"))
+        prompt = payload["prompt"]
+        cursor = payload.get("hook_event_name") == "beforeSubmitPrompt"
         kind = next((kind for kind, pattern in KINDS
                      if any(real(m.group()) for m in pattern.finditer(prompt))), None)
     except Exception as error:  # noqa: BLE001
@@ -38,11 +40,14 @@ def main():
         from guard_adapter import log
         log("guard-prompt failed open", type(error).__name__)
         sys.exit(0)
+    message = kind and (
+        "agent-config: that message looks like it contains a %s. The agent will not act on it, "
+        "but the key is exposed now, so rotate it. To give an agent a secret without pasting it, "
+        "run this in your own terminal: npx @sid-thephysicskid/agent-config secret NAME" % kind)
+    if cursor:
+        print(json.dumps({"continue": False, "user_message": message} if kind else {"continue": True}))
     if kind:
-        sys.stderr.write(
-            "agent-config: that message looks like it contains a %s. The agent will not act on it, "
-            "but the key is exposed now, so rotate it. To give an agent a secret without pasting it, "
-            "run this in your own terminal: npx @sid-thephysicskid/agent-config secret NAME\n" % kind)
+        sys.stderr.write(message + "\n")
         sys.exit(2)
 
 

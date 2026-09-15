@@ -1987,6 +1987,9 @@ CMD_CASES += [
     ("echo x > ./.claude/settings.json", FEAT, True),
     ("rm ./.claude/hooks/mine.py", FEAT, True),
     ("echo x > ./.codex/hooks.json", FEAT, True),
+    ("echo x > ~/.cursor/hooks.json", FEAT, True),
+    ("echo x > ./.cursor/hooks.json", FEAT, True),
+    ("echo x > ./.cursor/rules/style.mdc", FEAT, False),
     # Instruction files grant no permissions, so they are never protected.
     ("echo x > /tmp/fakehome/.claude/CLAUDE.md", FEAT, False),
     ("echo x > /tmp/fakehome/.codex/AGENTS.md", FEAT, False),
@@ -2706,6 +2709,9 @@ PATH_CASES += [
     (f"{HOME}/.codex/hooks.json", True, True, {"patch": '*** Update File: hooks.json\n@@\n-  "command": "python3 guard-prompt.py"\n'}),
     (f"{HOME}/.codex/hooks.json", True, False, {"patch": '*** Update File: hooks.json\n@@\n-  "timeout": 5\n+  "timeout": 9\n'}),
     (f"{HOME}/.codex/hooks.json", True, True, {"patch": '*** Update File: hooks.json\n@@\n-  "command": "python3 guard-codex.py"\n'}),
+    (f"{HOME}/.cursor/hooks.json", True, True, {"old_string": '{"command": "python3 guard-cursor.py"}', "new_string": ""}),
+    (f"{HOME}/.cursor/hooks.json", True, False, {"old_string": '"timeout": 5', "new_string": '"timeout": 9'}),
+    (f"{HOME}/.cursor/hooks.json", True, True),
     (f"{HOME}/.claude/hooks/guard-bash.py", True, True, {"old_string": "a", "new_string": "b"}),
     (f"{HOME}/.local/share/agent-config/0.3.0/hooks/guard_rules.py", True, True, {"content": "x"}),
 ]
