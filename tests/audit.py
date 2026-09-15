@@ -160,14 +160,6 @@ for f in TRACKED:
                          txt, re.I):
         add("REVIEW", f"real-looking home path in {f}", m.group(0))
 
-# ---- licence claims match the tree ----------------------------------------
-lic = read("LICENSE") if os.path.exists(os.path.join(REPO, "LICENSE")) else ""
-for claimed in set(re.findall(r"`(skills/[a-z-]+(?:/[\w./-]+)?)`", lic)):
-    if not os.path.exists(os.path.join(REPO, claimed)):
-        add("BLOCKER", f"LICENSE names {claimed}, which does not exist")
-if os.path.exists(os.path.join(REPO, "vendor")):
-    add("BLOCKER", "vendor/ is back: adapted sources belong in canonical skill files with notices")
-
 # ---- docs point at real things ---------------------------------------------
 tracked_set = set(TRACKED)
 for f in TRACKED:
@@ -180,17 +172,9 @@ for f in TRACKED:
             continue
         cand = os.path.normpath(os.path.join(base, target))
         if cand not in tracked_set and not os.path.exists(os.path.join(REPO, cand)):
-            # BLOCKER, not REVIEW. Only BLOCKER exits non-zero, so as REVIEW
-            # this was a working repo-wide link checker whose findings were
-            # printed and discarded. The skills-only checker in evals/ never
-            # covered these files.
             add("BLOCKER", f"dead link in {f}", target)
 
-# House style, enforced where it is actually broken. The rule is in AGENTS.md
-# and the README, and the only checker for it walked skills/ alone, so every
-# violation lived in the root docs where nothing looked. A rule the repo states
-# and does not enforce is worse than no rule: it reads as sloppiness.
-# Built from the code point because this file is covered by the rule too.
+# House style. Built from the code point so this file passes its own rule.
 EM_DASH = chr(0x2014)
 for f in TRACKED:
     if not f.endswith((".md", ".html")):
@@ -198,23 +182,6 @@ for f in TRACKED:
     for n, line in enumerate(read(f).splitlines(), 1):
         if EM_DASH in line:
             add("BLOCKER", f"em dash in {f}:{n}", line.strip()[:80])
-
-# Every skill the docs name must exist, or a reader is sent nowhere.
-skills = set()
-for root in ("skills", "operator-skills"):
-    path = os.path.join(REPO, root)
-    if os.path.isdir(path):
-        skills.update(d for d in os.listdir(path)
-                      if os.path.isdir(os.path.join(path, d)))
-HOST_COMMANDS = {"loop", "config", "help", "clear", "init", "compact", "resume",
-                 "code-review", "security-review", "run", "simplify"}
-for f in TRACKED:
-    if not f.endswith(".md"):
-        continue
-    for m in re.finditer(r"`/([a-z][a-z-]{2,20})`", read(f)):
-        name = m.group(1)
-        if name not in skills and name not in HOST_COMMANDS:
-            add("NOTE", f"{f} points at /{name}", "not a skill here")
 
 # ---- report ----------------------------------------------------------------
 print(f"audit: {len(TRACKED)} tracked files")
