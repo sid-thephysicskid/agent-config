@@ -1,10 +1,10 @@
 # agent-config
 
-PreToolUse and UserPromptSubmit guard hooks for Claude Code and Codex. Python 3.9+ standard library only, no network.
+Tool-use and prompt guard hooks for Claude Code, Codex, and Cursor. Python 3.9+ standard library only, no network.
 
 ## Layout
 
-- `hooks/`: the guard. Entry points `guard-bash.py`, `guard-files.py`, `guard-codex.py`, `guard-prompt.py`; rules in `guard_*.py`. Runtime files only.
+- `hooks/`: the guard. Entry points `guard-bash.py`, `guard-files.py`, `guard-codex.py`, `guard-cursor.py`, `guard-prompt.py`; rules in `guard_*.py`. Runtime files only.
 - `tests/cases.py`: block and allow cases. `tests/ordinary.txt`: real commands that must never be refused.
 - `tests/redteam-candidates.txt`: known bypasses, each with a reason.
 - `install.sh`, `uninstall.sh`, `bin/agent-config.js`, `scripts/install_*.py`: installer.

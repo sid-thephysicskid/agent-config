@@ -1,6 +1,6 @@
 {
   "name": "@sid-thephysicskid/agent-config",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Guardrails for Claude Code, Codex, and Cursor: hooks that stop force pushes, secret leaks, and destructive commands before they run.",
   "license": "MIT",
   "author": "Sid Abhinav",

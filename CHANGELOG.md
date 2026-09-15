@@ -2,6 +2,17 @@
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-15
+
+### Added
+
+- Cursor: `install` wires `~/.cursor/hooks.json` when `~/.cursor` exists. A `preToolUse` hook guards Shell, Read, Write, Delete, and MCP tools, and the prompt hook refuses pasted keys in the editor. Cursor's CLI does not run prompt hooks yet, and cloud agents only run project hooks.
+
+### Changed
+
+- When Cursor loads the Claude Code hooks from `settings.json`, they defer to the Cursor hook instead of deciding twice.
+- `scripts/install_codex_hooks.py` is now `scripts/install_hooks_json.py` and merges both Codex and Cursor `hooks.json`.
+
 ## [0.5.1] - 2026-09-15
 
 ### Fixed

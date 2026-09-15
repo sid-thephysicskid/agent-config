@@ -21,7 +21,7 @@ USER_SETTINGS='{"model":"opus","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":
 USER_CODEX='{"description":"mine","hooks":{"Stop":[{"hooks":[{"type":"command","command":"python3 ~/mine/stop.py"}]}]}}'
 USER_CURSOR='{"version":1,"hooks":{"stop":[{"command":"./hooks/mine.sh"}]},"theirs":true}'
 
-echo "== fresh install wires both hosts and proves the guard decides"
+echo "== fresh install wires Claude Code and Codex and proves the guard decides"
 home fresh
 chk "install exits 0" "$(install)" 0
 chk "three Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 3
