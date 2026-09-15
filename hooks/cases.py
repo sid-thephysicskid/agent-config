@@ -10,7 +10,10 @@ unrelated rule that also happens to block the same command.
 The comments are the point. Each says which incident the case encodes, so
 nobody deletes a rule that looks pointless.
 """
-from fixtures import DETACHED, FEAT, HOME, MAIN, NOREPO, VIRGIN  # noqa: F401
+from fixtures import DETACHED, FEAT, HOME, MAIN, NOREPO, SETTINGS, SETTINGS_BODY, VIRGIN  # noqa: F401
+
+# should_block value: allowed by default, refused with AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1.
+STRICT = "strict"
 
 # (command, cwd, should_block)
 CMD_CASES = [
@@ -66,10 +69,10 @@ CMD_CASES = [
     ('say hi; psql -c "DROP DATABASE app"', MAIN, True),
     ('printf ok; supabase db reset', MAIN, True),
     (f'git -C {MAIN} push --force', FEAT, True),
-    (f'git -C {MAIN} commit -m x', FEAT, True),
+    (f'git -C {MAIN} commit -m x', FEAT, STRICT),
     (f'git -C {MAIN} reset --hard HEAD~1', FEAT, True),
     (f'git -C {MAIN} clean -fd', FEAT, True),
-    ('git -c user.name=x commit -m x', MAIN, True),
+    ('git -c user.name=x commit -m x', MAIN, STRICT),
     ('rm -rf ~/', MAIN, True),
     ('rm -rf "$HOME"', MAIN, True),
     ('rm -rf $HOME/', MAIN, True),
@@ -79,7 +82,7 @@ CMD_CASES = [
     ('rm -rf /', MAIN, True),
     ('sudo rm -rf /var', MAIN, True),
     ('xargs rm -rf < list.txt', MAIN, True),
-    ('git push origin HEAD:refs/heads/main', FEAT, True),
+    ('git push origin HEAD:refs/heads/main', FEAT, STRICT),
     ('git push origin +HEAD:main', FEAT, True),
     ('git push origin +feature:main', FEAT, True),
     ('git push origin --delete main', FEAT, True),
@@ -104,7 +107,7 @@ CMD_CASES = [
     ('git worktree remove --force ../wt', MAIN, True),
     # ---- classics that must keep blocking ----
     ('git checkout .', MAIN, True),
-    ('git commit -m "feat: x"', MAIN, True),
+    ('git commit -m "feat: x"', MAIN, STRICT),
     ('psql postgres://u:p@prod-db.example.com/app', MAIN, True),
     ('git branch -D old', MAIN, True),
 
@@ -197,7 +200,7 @@ CMD_CASES += [
     # documentation is a free bypass of every rule in the file.
     ('git filter-branch --help', FEAT, False),
     ('git help filter-branch', FEAT, False),
-    ('git commit -m pwn -- --help', MAIN, True, 'commit'),
+    ('git commit -m pwn -- --help', MAIN, STRICT, 'commit'),
     ('git push --force origin main -- --help', FEAT, True, 'force push'),
 
     # `git rm` is a git subcommand. `git rm -r --cached .` deletes nothing from
@@ -222,12 +225,10 @@ CMD_CASES += [
     ('mkdir -p app && cd app && git init && git commit -m init', MAIN, False),
     ('mkdir app && cd app && git init && git add . && git commit -m init', FEAT, False),
     ('mkdir -p /tmp/newproj && cd /tmp/newproj && git init && git commit -m i', MAIN, False),
-    # ...and the hazard that carve-out must not open. A new subdirectory of the
-    # CURRENT repo is still the current repo, so a commit there lands on the
-    # protected branch. No `git init`, no carve-out.
-    ('mkdir sub && cd sub && git commit -m x', MAIN, True, 'commit'),
-    ('mkdir -p sub && cd sub && git commit -am x', MAIN, True, 'commit'),
-    ('cd nonexistent-dir && git commit -m x', MAIN, True),
+    # An unresolvable cd leaves the branch unknown; a commit is local, so it is allowed.
+    ('mkdir sub && cd sub && git commit -m x', MAIN, False),
+    ('mkdir -p sub && cd sub && git commit -am x', MAIN, False),
+    ('cd nonexistent-dir && git commit -m x', MAIN, False),
 ]
 
 
@@ -344,16 +345,16 @@ CMD_CASES += [
     ("sudo git push --force", FEAT, True),
     ("/usr/bin/git push --force", FEAT, True),
     ("command git reset --hard HEAD~3", FEAT, True),
-    ("env git commit -m x", MAIN, True),
+    ("env git commit -m x", MAIN, STRICT),
     ("nohup git push --force", FEAT, True),
     ("time git clean -fd", FEAT, True),
-    ("eval 'git commit -m x'", MAIN, True),
-    ("(git commit -m x)", MAIN, True),
-    ("if true; then git commit -m x; fi", MAIN, True),
+    ("eval 'git commit -m x'", MAIN, STRICT),
+    ("(git commit -m x)", MAIN, STRICT),
+    ("if true; then git commit -m x; fi", MAIN, STRICT),
     ("for i in 1; do git push --force; done", FEAT, True),
     ("xargs -I{} git push --force", FEAT, True),
     ("git push \\\n --force", FEAT, True),
-    ("git \\\n commit -m x", MAIN, True),
+    ("git \\\n commit -m x", MAIN, STRICT),
     ("rm -rf \\\n /", MAIN, True),
     ("bash -c 'rm -rf /'", MAIN, True),
     # Four hand-copied runner lists disagreed on membership, so a sibling
@@ -444,13 +445,12 @@ CMD_CASES += [
     ("trash-put old.log", FEAT, False),
     ("grep -r 'ash' src/", FEAT, False),
     ("git push -uf origin main", FEAT, True),
-    ("git push origin master", FEAT, True),
+    ("git push origin master", FEAT, STRICT),
     # SQL split across real newlines lands in separate segments
     ('psql -c "DR' + 'OP\nTABLE users"', MAIN, True),
     ('psql -c "DELE' + 'TE\nFROM users"', MAIN, True),
-    # a branch lookup that cannot resolve must fail CLOSED
-    # A cwd that cannot be resolved at all fails CLOSED.
-    ("git commit -m x", "/nonexistent/path/xyz", True),
+    # An unresolvable cwd leaves the branch unknown; only a push fails closed, and only in strict mode.
+    ("git commit -m x", "/nonexistent/path/xyz", False),
     # ...but a real directory that simply is not a repo needs no protection:
     # git refuses on its own, and blocking here is noise.
     ("git commit -m x", NOREPO, False),
@@ -479,7 +479,7 @@ CMD_CASES += [
     # Without this the worktree workflow AGENTS.md prescribes was blocked.
     (f"cd {FEAT} && git commit -m x", NOREPO, False),
     (f"cd {FEAT} && git push -u origin feature/x", NOREPO, False),
-    (f"cd {MAIN} && git commit -m x", NOREPO, True),
+    (f"cd {MAIN} && git commit -m x", NOREPO, STRICT),
 
     # daily commands that must never be blocked
     ("find . -name '*.pyc' -delete", MAIN, False),
@@ -545,16 +545,16 @@ CMD_CASES += [
     # flags may sit between the subcommand and -b
     ('git checkout -q -b chore/x && git commit -m "chore: x"', MAIN, False),
     # but branching does not license a push straight at a protected branch
-    ("git checkout -b feature/x && git push origin main", MAIN, True),
+    ("git checkout -b feature/x && git push origin main", MAIN, STRICT),
 
     # ---- round 2 red team: cap bypasses, override spoof, metadata ops ----
     # Padding used to push the real command past the analysis cap.
     ("echo " + "x" * 40000 + " && rm -rf ~/", MAIN, True),
     ("; ".join(["true"] * 500) + "; rm -rf ~/", MAIN, True),
-    ("; ".join(["true"] * 500) + "; git commit -m x", MAIN, True),
+    ("; ".join(["true"] * 500) + "; git commit -m x", MAIN, STRICT),
     # A mere MENTION of branch creation must not grant the override.
-    ('echo git checkout -b feature/z && git commit -m x', MAIN, True),
-    ("grep -r 'git checkout -b feature/q' . && git commit -m x", MAIN, True),
+    ('echo git checkout -b feature/z && git commit -m x', MAIN, STRICT),
+    ("grep -r 'git checkout -b feature/q' . && git commit -m x", MAIN, STRICT),
     # metadata-only operations disclose nothing
     ("ls ~/.ssh", MAIN, False),
     ("ls -la ~/.ssh/", MAIN, False),
@@ -570,7 +570,7 @@ CMD_CASES += [
     ("DATABASE_URL=postgres://localhost/app_development npm test", MAIN, False),
     ("rm -rf .git", MAIN, True),
     # a subshell cd does not change the caller's directory
-    (f"(cd {FEAT}) && git commit -m x", MAIN, True),
+    (f"(cd {FEAT}) && git commit -m x", MAIN, STRICT),
     # ...but a real one does
     (f"cd {FEAT} && git commit -m x", MAIN, False),
 
@@ -587,12 +587,13 @@ CMD_CASES += [
     ("find . -name '.env*' -exec cp {} /tmp/out \\;", MAIN, True),
     ("find . -name '*.env'", MAIN, False),
     # a subshell cd applies INSIDE the parens, and is discarded on the way out
-    (f"(cd {MAIN} && git push)", FEAT, True),
-    (f"(cd {MAIN} && git commit -m x)", FEAT, True),
+    (f"(cd {MAIN} && git push)", FEAT, STRICT),
+    (f"(cd {MAIN} && git commit -m x)", FEAT, STRICT),
     (f"(cd {FEAT} && git commit -m x)", FEAT, False),
-    # an unresolvable cd must fail closed, not keep the previous directory
-    (f"cd {FEAT} && cd - && git commit -m x", MAIN, True),
-    ("cd /no/such/dir && git commit -m x", FEAT, True),
+    # an unresolvable cd is unknown, not the previous directory: commit allowed, strict push refused
+    (f"cd {FEAT} && cd - && git commit -m x", MAIN, False),
+    (f"cd {FEAT} && cd - && git push", MAIN, STRICT, "undeterminable"),
+    ("cd /no/such/dir && git commit -m x", FEAT, False),
     # flag values must not break the template-copy exemption
     ("install -m 600 .env.example .env", MAIN, False),
     ("cp -p .env.example .env", MAIN, False),
@@ -614,7 +615,7 @@ CMD_CASES += [
     # An INTERPRETER heredoc executes its body, so the body is scanned. Round 5
     # found `bash <<'EOF' rm -rf ~ EOF` sailing through when all heredoc bodies
     # were treated as inert. Conservative here, and the alternative is a hole.
-    ("python3 - <<'PY'\nprint('git commit -m x')\nPY", MAIN, True),
+    ("python3 - <<'PY'\nprint('git commit -m x')\nPY", MAIN, STRICT),
     ("bash <<'EOF'\nrm -rf ~\nEOF", MAIN, True),
     ("sh <<EOF\ngit push --force\nEOF", MAIN, True),
     ("cat <<EOF | bash\nrm -rf ~\nEOF", MAIN, True),
@@ -624,7 +625,7 @@ CMD_CASES += [
     # ...but a heredoc fed to a SQL client really does execute
     ("psql <<'EOSQL'\nDR" + "OP TABLE users;\nEOSQL", MAIN, True),
     # ...and a real command after the heredoc still counts
-    ("cat > x.sh <<'EOF'\nhello\nEOF\ngit commit -m x", MAIN, True),
+    ("cat > x.sh <<'EOF'\nhello\nEOF\ngit commit -m x", MAIN, STRICT),
 
     # ---- round 4 red team + adoption ----
     # force push at a protected branch WITHOUT a colon: the headline guarantee
@@ -645,7 +646,7 @@ CMD_CASES += [
     # the standard first commit in a brand-new repo
     ("mkdir -p p && cd p && git init && git commit -m init", NOREPO, False),
     # pushd moves the shell just like cd
-    (f"pushd {MAIN} && git commit -m x", FEAT, True),
+    (f"pushd {MAIN} && git commit -m x", FEAT, STRICT),
     (f"pushd {FEAT} && git commit -m x", FEAT, False),
     # a key used as an identity flag is never printed
     ("ssh-add ~/.ssh/id_ed25519", MAIN, False),
@@ -655,14 +656,14 @@ CMD_CASES += [
     # grepping a schema file is not running it
     ("cat schema.sql | grep 'DR" + "OP TABLE'", MAIN, False),
     # an override earned in one repo must not carry into another
-    (f"git checkout -b feature/a && cd {MAIN} && git push", FEAT, True),
+    (f"git checkout -b feature/a && cd {MAIN} && git push", FEAT, STRICT),
 
     # ---- round 5 red team ----
     # a commit MESSAGE mentioning `git init` must not unlock a commit on main
-    ("git commit -m 'chore: git init and scaffolding'", MAIN, True),
-    ("git commit -am 'docs: explain git init flow'", MAIN, True),
-    ("echo 'run git init first' && git commit -m docs", MAIN, True),
-    ("git init /tmp/throwaway_xyz && git commit -m x", MAIN, True),
+    ("git commit -m 'chore: git init and scaffolding'", MAIN, STRICT),
+    ("git commit -am 'docs: explain git init flow'", MAIN, STRICT),
+    ("echo 'run git init first' && git commit -m docs", MAIN, STRICT),
+    ("git init /tmp/throwaway_xyz && git commit -m x", MAIN, STRICT),
     # ...but a real init of THIS directory still permits the first commit
     ("git init && git add . && git commit -m 'initial commit'", NOREPO, False),
     # a quoted refspec still forces
@@ -677,7 +678,7 @@ CMD_CASES += [
     # `pushd dir >/dev/null` is the standard idiom
     (f"pushd {FEAT} >/dev/null && git commit -m x", MAIN, False),
     (f"cd {FEAT} 2>/dev/null && git commit -m x", MAIN, False),
-    (f"cd {MAIN} >/dev/null && git commit -m x", FEAT, True),
+    (f"cd {MAIN} >/dev/null && git commit -m x", FEAT, STRICT),
     # a SQL verb behind a generic tool's -e/-c is not SQL
     ("grep -e 'DELETE FROM users' app.log", MAIN, False),
     ("echo -e 'UPDATE users SET a=1'", MAIN, False),
@@ -691,14 +692,14 @@ CMD_CASES += [
     ("mkdir -p proj && cd proj && git init && git commit -m init", NOREPO, False),
     ("git init -b main && git add . && git commit -m init", NOREPO, False),
     # a commit in a DIFFERENT directory than the one initialised still blocks
-    (f"git init /tmp/other_xyz && git -C {MAIN} commit -m x", NOREPO, True),
+    (f"git init /tmp/other_xyz && git -C {MAIN} commit -m x", NOREPO, STRICT),
 
     # ---- round 6 red team ----
     # re-initialising an EXISTING repo must not mark it virgin
-    ("git init . && git commit -m x", MAIN, True),
-    ("git init && git add . && git commit -m 'initial commit'", MAIN, True),
-    ("git init --bare && git commit -m x", MAIN, True),
-    (f"git -C {MAIN} init && git commit -m x", MAIN, True),
+    ("git init . && git commit -m x", MAIN, STRICT),
+    ("git init && git add . && git commit -m 'initial commit'", MAIN, STRICT),
+    ("git init --bare && git commit -m x", MAIN, STRICT),
+    (f"git -C {MAIN} init && git commit -m x", MAIN, STRICT),
     # `.env.local.example` is the Next.js convention and is a template
     ("cat .env.local.example", MAIN, False),
     ("git add .env.local.example", FEAT, False),
@@ -881,7 +882,7 @@ CMD_CASES += [
     ("rm -rf ${HOME:?}", FEAT, True),
     ("rm -rf ${PWD}/..", FEAT, True),
     ("aws s3 rm s3://${BUCKET} --recursive", FEAT, True),
-    ("git -C ${PWD} push", MAIN, True),
+    ("git -C ${PWD} push", MAIN, STRICT),
     # ...and the group command the splitters were there for still resolves
     ("{ git push --force; }", FEAT, True),
     ("{ npm test; }", FEAT, False),
@@ -943,11 +944,11 @@ CMD_CASES += [
     ("gzip -x ~/.aws/credentials", MAIN, True),
     ("unzip -x ~/.netrc", MAIN, True),
     # a directory that does not exist yet is UNKNOWN, which fails closed
-    ("mkdir sub && cd sub && git commit -m wip", MAIN, True),
-    ("mkdir -p a/b && cd a/b && git push", MAIN, True),
+    ("mkdir sub && cd sub && git commit -m wip", MAIN, False),
+    ("mkdir -p a/b && cd a/b && git push", MAIN, STRICT),
     # a checkout back to a real branch clears the override
-    ("git checkout -b tmp && git checkout main && git commit -am wip", MAIN, True),
-    ("git checkout -b tmp && git switch master && git push", MAIN, True),
+    ("git checkout -b tmp && git checkout main && git commit -am wip", MAIN, STRICT),
+    ("git checkout -b tmp && git switch master && git push", MAIN, STRICT),
     ("git checkout -b feature/y && git commit -m wip", MAIN, False),
     # a nested substitution is still a substitution
     ('echo "$(cat $(pwd)/.env)"', FEAT, True),
@@ -962,7 +963,7 @@ CMD_CASES += [
     ("psql 'host=db.production.acme user=x'", FEAT, True),
     # GIT_DIR= retargets the whole command, and segments() strips the
     # assignment before the rules see it, so it has to be read from raw.
-    ("GIT_DIR=/other/repo/.git git commit -m wip", FEAT, True),
+    ("GIT_DIR=/other/repo/.git git commit -m wip", FEAT, False),
     ("GIT_DIR=/other/repo/.git git push --force", FEAT, True),
     ("psql -h staging-db.acme -c 'select 1'", FEAT, False),
     # ...and -h is a database host only for a database client
@@ -994,10 +995,10 @@ CMD_CASES += [
     # It returned any dotless token as a branch name, so `git checkout src`
     # invented a non-protected branch and disabled the branch rule for the rest
     # of the line. The name is verified against git now.
-    ("git checkout src && git push", MAIN, True),
-    ("git checkout Makefile && git commit -am wip", MAIN, True),
-    ("git checkout HEAD && git commit -am wip", MAIN, True),
-    ("git switch README ; git push origin", MAIN, True),
+    ("git checkout src && git push", MAIN, STRICT),
+    ("git checkout Makefile && git commit -am wip", MAIN, STRICT),
+    ("git checkout HEAD && git commit -am wip", MAIN, STRICT),
+    ("git switch README ; git push origin", MAIN, STRICT),
     ("git checkout --track -b feature/z && git commit -am x", MAIN, False),
     ('git checkout -b "feature/q" && git commit -am x', MAIN, False),
     # brace expansion, the fallout from round 12 dropping `{`/`}` as splitters
@@ -1033,8 +1034,8 @@ CMD_CASES += [
     ("psql -c 'UPDATE a SET x=1 WHERE id=2; UPDATE users SET admin=true'", FEAT, True),
     ("psql -c 'SELECT 1; SELECT 2'", FEAT, False),
     # a cd the pattern does not recognise must be UNKNOWN, not stale
-    ("cd -P " + MAIN + " && git commit -am wip", FEAT, True),
-    ("cd -- " + MAIN + " && git commit -am wip", FEAT, True),
+    ("cd -P " + MAIN + " && git commit -am wip", FEAT, STRICT),
+    ("cd -- " + MAIN + " && git commit -am wip", FEAT, STRICT),
     ("cd -P " + FEAT + " && git status", MAIN, False),
     # padding on BOTH sides of an oversized line, and 2000 DISTINCT segments
     ("echo " + "p" * 34000 + " ; rm -rf $HOME ; echo " + "q" * 9000, FEAT, True),
@@ -1071,11 +1072,11 @@ CMD_CASES += [
     ("cat .env.example > .env", FEAT, False),
     ("cat .env", FEAT, True),
     # quoting must not defeat the refspec rules
-    ("git push origin 'main'", FEAT, True),
-    ('git push origin "main"', FEAT, True),
-    ("git push origin refs/heads/main", FEAT, True),
+    ("git push origin 'main'", FEAT, STRICT),
+    ('git push origin "main"', FEAT, STRICT),
+    ("git push origin refs/heads/main", FEAT, STRICT),
     ("git push origin +'main'", FEAT, True),
-    ("git push origin 'HEAD:main'", FEAT, True),
+    ("git push origin 'HEAD:main'", FEAT, STRICT),
     ("git push origin feature/x", FEAT, False),
 
     # ---- round 14 red team ----
@@ -1089,7 +1090,8 @@ CMD_CASES += [
     ('echo x \\" ; terraform destroy', FEAT, True),
     ('echo x \\" ; kubectl delete namespace prod', FEAT, True),
     ('git commit -m x \\" ; rm -rf /', FEAT, True),
-    ('cd /tmp \\" ; git commit -m x', MAIN, True),
+    ('cd /tmp \\" ; git commit -m x', MAIN, False),
+    ('cd /tmp \\" ; git push', MAIN, STRICT, "undeterminable"),
     # ...and the mirror image: bash does NOT honour `\` inside single quotes,
     # so `'a\'` really does end the string and start a new command.
     ("echo 'a\\' ; rm -rf /", FEAT, True),
@@ -1101,8 +1103,8 @@ CMD_CASES += [
     # CRITICAL. `git checkout <branch> -- <path>` restores a file and leaves you
     # where you are. Round 13 verified the name against git but not the SHAPE,
     # so a real branch name there became the override for the rest of the line.
-    ("git checkout feature/y -- f && git commit -am wip", MAIN, True),
-    ("git checkout feature/y -- f && git push", MAIN, True),
+    ("git checkout feature/y -- f && git commit -am wip", MAIN, STRICT),
+    ("git checkout feature/y -- f && git push", MAIN, STRICT),
     ("git checkout main -- f.txt && git commit -am wip", FEAT, False),
     # HIGH. The oversized-line middle window covered nine verbs, so padding both
     # sides hid every secret read and the whole protected-branch contract.
@@ -1149,14 +1151,14 @@ CMD_CASES += [
     # git_invocations never sees it. `npm version patch` on main is the standard
     # way a release lands on a protected branch by accident, and /ship names it
     # as the trap it is.
-    ("npm version patch", MAIN, True, "version bump"),
-    ("npm version 1.2.3", MAIN, True, "version bump"),
-    ("yarn version --minor", MAIN, True, "version bump"),
-    ("pnpm version major", MAIN, True, "version bump"),
-    ("lerna version", MAIN, True, "version bump"),
-    ("standard-version", MAIN, True, "version bump"),
-    ("bump2version patch", MAIN, True, "version bump"),
-    ("cargo release 1.2.0", MAIN, True, "version bump"),
+    ("npm version patch", MAIN, STRICT, "version bump"),
+    ("npm version 1.2.3", MAIN, STRICT, "version bump"),
+    ("yarn version --minor", MAIN, STRICT, "version bump"),
+    ("pnpm version major", MAIN, STRICT, "version bump"),
+    ("lerna version", MAIN, STRICT, "version bump"),
+    ("standard-version", MAIN, STRICT, "version bump"),
+    ("bump2version patch", MAIN, STRICT, "version bump"),
+    ("cargo release 1.2.0", MAIN, STRICT, "version bump"),
     # ...the forms that do NOT commit stay allowed, even on main
     ("npm version --no-git-tag-version patch", MAIN, False),
     ("npm version", MAIN, False),          # prints, does not bump
@@ -1225,8 +1227,8 @@ CMD_CASES += [
     ("cat > /tmp/x.sh <<'EOF'\nrm -rf ~\nEOF\nbash < /tmp/x.sh", FEAT, True),
     ("cat > /tmp/x.sh <<'EOF'\nrm -rf ~\nEOF\ncat /tmp/x.sh | bash", FEAT, True),
     # A bare `-h` anywhere exempted a real commit, including a redirect TARGET.
-    ("git commit -am pwn > -h", MAIN, True, "commit directly to"),
-    ("git commit -m pwn -- --help", MAIN, True, "commit directly to"),
+    ("git commit -am pwn > -h", MAIN, STRICT, "commit directly to"),
+    ("git commit -m pwn -- --help", MAIN, STRICT, "commit directly to"),
     ("git merge -h", MAIN, False),
     ("git commit --help", MAIN, False),
     # The --dry-run lookahead was a substring test, so the negated form
@@ -1294,10 +1296,10 @@ CMD_CASES += [
     # written, so a substitution in there executes NOW. All four spellings
     # were treated alike and the body blanked as inert.
     ("cat > /tmp/x.sh <<EOF\n$(rm -rf ~)\nEOF", FEAT, True),
-    ("tee /tmp/x.txt <<EOF\n$(git commit -am pwn)\nEOF", MAIN, True),
+    ("tee /tmp/x.txt <<EOF\n$(git commit -am pwn)\nEOF", MAIN, STRICT),
     ("cat > /tmp/x <<EOF\n`rm -rf ~`\nEOF", FEAT, True),
     ("cat > /tmp/x <<-EOF\n$(terraform destroy)\nEOF", FEAT, True),
-    ("cat > README.md <<EOF\nhello $(git commit -am pwn) world\nEOF", MAIN, True),
+    ("cat > README.md <<EOF\nhello $(git commit -am pwn) world\nEOF", MAIN, STRICT),
     # ...and a QUOTED one really is literal
     ("cat > /tmp/x.sh <<'EOF'\n$(rm -rf ~)\nEOF", FEAT, False),
     ('cat > /tmp/x.sh <<"EOF"\n$(rm -rf ~)\nEOF', FEAT, False),
@@ -1315,16 +1317,16 @@ CMD_CASES += [
     # `--squash` stages without committing for merge, and writes a real commit
     # for commit. The exemption was matched against the whole segment with no
     # idea which verb it belonged to.
-    ("git commit --squash HEAD -a", MAIN, True, "commit directly to"),
-    ("git commit --squash=HEAD~1 -a", MAIN, True, "commit directly to"),
-    ("git commit -am wip --ff-only", MAIN, True, "commit directly to"),
-    ("git commit -am wip --quit", MAIN, True, "commit directly to"),
+    ("git commit --squash HEAD -a", MAIN, STRICT, "commit directly to"),
+    ("git commit --squash=HEAD~1 -a", MAIN, STRICT, "commit directly to"),
+    ("git commit -am wip --ff-only", MAIN, STRICT, "commit directly to"),
+    ("git commit -am wip --quit", MAIN, STRICT, "commit directly to"),
     ("git merge --squash feature/y", MAIN, False),
     ("git merge --ff-only origin/main", MAIN, False),
     ("git am --show-current-patch", MAIN, False),
     # An unresolvable cwd must not silently become the hook process's own.
-    ('popd; echo "$(git commit -am pwn)"', NOREPO, True),
-    ('cd /no/such/dir && echo "$(git commit -am pwn)"', NOREPO, True),
+    ('popd; echo "$(git commit -am pwn)"', NOREPO, False),
+    ('cd /no/such/dir && echo "$(git commit -am pwn)"', NOREPO, False),
     # Round 15 gave `destroy` the run-all treatment and left `apply -destroy`.
     ("terragrunt run-all apply -destroy", FEAT, True),
     ("terragrunt run-all apply", FEAT, False),
@@ -1365,8 +1367,8 @@ CMD_CASES += [
     # ---- round 15: forms of the commit verbs that write no commit ----
     ("git cherry-pick --help", MAIN, False),
     # ...while the committing forms stay blocked
-    ("git merge feature/y", MAIN, True, "git merge"),
-    ("git merge --no-ff feature/y", MAIN, True, "git merge"),
+    ("git merge feature/y", MAIN, STRICT, "git merge"),
+    ("git merge --no-ff feature/y", MAIN, STRICT, "git merge"),
 
     # ---- round 15: mutation survivors, each with a verified killing tuple ----
     # These rules had NO coverage at all, or coverage a second rule was masking.
@@ -1378,7 +1380,7 @@ CMD_CASES += [
     ("supabase db push --project-ref abc123", FEAT, True, "remote Supabase"),
     # `--work-tree`/`--git-dir` consume a following token; an off-by-one in that
     # skip loop turned the next word into the subcommand.
-    ("git --work-tree /tmp/zz commit -m x", MAIN, True, "commit directly to"),
+    ("git --work-tree /tmp/zz commit -m x", MAIN, STRICT, "commit directly to"),
     ("git --git-dir=/tmp/zz/.git push --force", FEAT, True, "force push"),
     ("git --no-pager log --oneline", FEAT, False),
     # normalize_path must keep resolving `..` inside an absolute path.
@@ -1411,16 +1413,16 @@ CMD_CASES += [
     # ---- round 15 red team ----
     # HIGH, a round-14 regression. The --continue exemption was matched against
     # the WHOLE segment, so an ordinary commit MESSAGE carried it.
-    ('git commit -am "wip --continue"', MAIN, True, "commit directly to"),
-    ('git commit -m "fix: handle --abort path"', MAIN, True, "commit directly to"),
-    ('git merge feature/y -m "done --continue"', MAIN, True, "git merge"),
+    ('git commit -am "wip --continue"', MAIN, STRICT, "commit directly to"),
+    ('git commit -m "fix: handle --abort path"', MAIN, STRICT, "commit directly to"),
+    ('git merge feature/y -m "done --continue"', MAIN, STRICT, "git merge"),
     # ...while the real flags still exempt
     ("git rebase --skip", MAIN, False),
     # HIGH, a 14-round survivor. A substitution EXECUTES, and the destructive
     # rules never looked inside one. Prose heads and assignment heads alike.
     ('echo "$(rm -rf /)"', FEAT, True),
     ('echo "cleanup: $(rm -rf build ~)"', FEAT, True),
-    ('echo "$(git commit -am x)"', MAIN, True),
+    ('echo "$(git commit -am x)"', MAIN, STRICT),
     ("RESULT=\"$(psql app -c 'DROP TABLE t')\"", FEAT, True),
     ('echo "$(git reset --hard HEAD~5)"', FEAT, True),
     ('echo "$(terraform destroy -auto-approve)"', FEAT, True),
@@ -1442,7 +1444,7 @@ CMD_CASES += [
     ("npm test -- -t 'delete from cart' && psql -c 'SELECT 1'", FEAT, False),
     ("psql app -f migrations/001.sql", FEAT, False),
     # `--detach` lands you on a detached HEAD, not on the named branch.
-    ("git checkout --detach feature/y && git commit -am wip", MAIN, True),
+    ("git checkout --detach feature/y && git commit -am wip", MAIN, STRICT),
 
     # ---- round 14: rules only an expected-reason can pin ----
     # A boolean cannot tell these apart from the branch rule that also fires.
@@ -1450,11 +1452,11 @@ CMD_CASES += [
     ("git push -f origin mybranch", FEAT, True, "force push"),
     ("git push --force origin mybranch", FEAT, True, "force push"),
     ("git push -f origin main", MAIN, True, "force push"),
-    ("git push origin main", FEAT, True, "pushing directly at"),
-    ("git commit -m x", MAIN, True, "commit directly to"),
-    ("git revert --no-edit HEAD", MAIN, True, "git revert"),
-    ("git cherry-pick abc1234", MAIN, True, "cherry-pick"),
-    ("git am patch.mbox", MAIN, True, "git am"),
+    ("git push origin main", FEAT, STRICT, "pushing directly at"),
+    ("git commit -m x", MAIN, STRICT, "commit directly to"),
+    ("git revert --no-edit HEAD", MAIN, STRICT, "git revert"),
+    ("git cherry-pick abc1234", MAIN, STRICT, "cherry-pick"),
+    ("git am patch.mbox", MAIN, STRICT, "git am"),
     # ...and the same verbs are fine on a feature branch
     ("git merge main", FEAT, False),
     ("git revert --no-edit HEAD", FEAT, False),
@@ -1510,10 +1512,10 @@ CMD_CASES += [
 
     # ---- round 13: rules the mutation pass found untested ----
     # Every protected branch, not just main and master.
-    ("git push origin trunk", FEAT, True),
-    ("git push origin release", FEAT, True),
-    ("git push origin production", FEAT, True),
-    ("git push origin prod", FEAT, True),
+    ("git push origin trunk", FEAT, STRICT),
+    ("git push origin release", FEAT, STRICT),
+    ("git push origin production", FEAT, STRICT),
+    ("git push origin prod", FEAT, STRICT),
     # _GLOBAL_FLAGS on the tools it was never pinned for
     ("gh --repo o/r api -X DELETE /repos/o/r", FEAT, True),
     ("terraform -chdir=./infra apply -destroy", FEAT, True),
@@ -1542,7 +1544,7 @@ CMD_CASES += [
     ("find . -name .env | sort | xargs cat", FEAT, True),
     # a bare `git checkout` must not crash the guard
     ("git checkout", FEAT, False),
-    ("git checkout && git commit -am wip", MAIN, True),
+    ("git checkout && git commit -am wip", MAIN, STRICT),
 
     # ---- round 12: branches that survived deletion with the suite still green
     # The heredoc whitelist. Each of these conditions had no case of its own,
@@ -1557,9 +1559,10 @@ CMD_CASES += [
     ("tar -czf out.tgz --exclude .cache src/", MAIN, False),
     ("rsync -a --exclude node_modules ./ /bak/", MAIN, False),
     # Subshell scoping: a cd inside ( ) must not leak out of it.
-    ("(cd /tmp && ls) && git commit -m wip", MAIN, True),
-    # popd to an unrecorded directory is unknown, which fails closed.
-    ("popd && git commit -m wip", FEAT, True),
+    ("(cd /tmp && ls) && git commit -m wip", MAIN, STRICT),
+    # popd to an unrecorded directory is unknown: a commit is allowed, a strict push is not.
+    ("popd && git commit -m wip", FEAT, False),
+    ("popd && git push", FEAT, STRICT, "undeterminable"),
     ("popd && git push --force", FEAT, True),
 
     # ---- round 19: destruction that is not spelled in SQL ----
@@ -1687,14 +1690,14 @@ CMD_CASES += [
     # an extraction that dropped a write would fail silently on segment 1.
     ("git init && git add . && git commit -m init", NOREPO, False),
     ("git init sub && cd sub && git commit -m init", NOREPO, False),
-    ("mkdir sub && cd sub && git commit -m x", NOREPO, True),
-    ("echo git init && git commit -m x", MAIN, True),
+    ("mkdir sub && cd sub && git commit -m x", NOREPO, False),
+    ("echo git init && git commit -m x", MAIN, STRICT),
     ("git checkout -b feature/z && git commit -m x", MAIN, False),
     ('git checkout -b "feature/q" && git commit -m x', MAIN, False),
     ("git switch -c fix/z && git commit -m x", MAIN, False),
-    ("git checkout -b tmp && git checkout main && git commit -m x", MAIN, True),
-    ("echo git checkout -b x && git commit -m x", MAIN, True),
-    ("git checkout src && git commit -m x", MAIN, True),
+    ("git checkout -b tmp && git checkout main && git commit -m x", MAIN, STRICT),
+    ("echo git checkout -b x && git commit -m x", MAIN, STRICT),
+    ("git checkout src && git commit -m x", MAIN, STRICT),
     ("git checkout feature/y && git commit -m x", MAIN, False),
 
     # ---- round 21: payloads that live inside ONE shlex token ----
@@ -1888,8 +1891,8 @@ CMD_CASES += [
     ("sh -e -c 'rm -rf /'", FEAT, True),
     ("/bin/bash -o pipefail -c 'rm -rf /'", FEAT, True),
     ("env -i bash -c 'rm -rf /'", FEAT, True),
-    ("bash -euo pipefail -c 'git commit -am wip'", MAIN, True),
-    ("sh -e -c 'git commit -am x'", MAIN, True),
+    ("bash -euo pipefail -c 'git commit -am wip'", MAIN, STRICT),
+    ("sh -e -c 'git commit -am x'", MAIN, STRICT),
     ("psql app -c 'TRUNCATE users CASCADE'", FEAT, True),
     ("psql app -c 'TRUNCATE users, sessions, orders'", FEAT, True),
     ("psql app -c 'TRUNCATE events RESTART IDENTITY'", FEAT, True),
@@ -1986,17 +1989,17 @@ CMD_CASES += [
     # ...while every real write still blocks
     ("git clean -f", MAIN, True),
     ("git clean -xdf", MAIN, True),
-    ("git push origin main", MAIN, True),
+    ("git push origin main", MAIN, STRICT),
     ("git push --all origin", MAIN, True),
     # THE TRAP that scopes this to push and clean only: `-n` is not universally
     # a dry run. `git commit -n` is --no-verify and really does commit, so a
     # blanket short-flag exemption would switch the branch rule off with one
     # character. DRY_RUN_SUBS exists to keep these blocked.
-    ("git commit -n -m x", MAIN, True),
-    ("git commit -nm x", MAIN, True),
-    ("git commit --no-verify -m x", MAIN, True),
+    ("git commit -n -m x", MAIN, STRICT),
+    ("git commit -nm x", MAIN, STRICT),
+    ("git commit --no-verify -m x", MAIN, STRICT),
     # A preview does not license the real thing later on the same line.
-    ("git push --dry-run origin main && git push origin main", MAIN, True),
+    ("git push --dry-run origin main && git push origin main", MAIN, STRICT),
     ("git clean -n && git clean -fd", MAIN, True),
 ]
 
@@ -2012,7 +2015,7 @@ CMD_CASES += [
     ("git commit --file=- <<'EOF'\nfix: note that rm -rf / is blocked\nEOF", FEAT, False),
     ("gh pr create --body-file - <<'EOF'\nwe refuse git clean -f here\nEOF", FEAT, False),
     # The exemption blanks the MESSAGE, not the branch rule.
-    ("git commit -F - <<'EOF'\nfix: an ordinary message\nEOF", MAIN, True),
+    ("git commit -F - <<'EOF'\nfix: an ordinary message\nEOF", MAIN, STRICT),
     # ...and the controls that keep the exemption narrow.
     # An UNQUOTED delimiter expands the body before git stores it, so a
     # substitution in there runs now and must still block.
@@ -2028,21 +2031,17 @@ CMD_CASES += [
     # ---- round 15: control paths are protected by LOCATION, not by shape ----
     # The live config still blocks. `~` on purpose, not a literal home, so the
     # verdict does not depend on whose machine runs the suite.
-    ("echo x > ~/.claude/CLAUDE.md", FEAT, True),
+    ("echo x > ~/.claude/CLAUDE.md", FEAT, False),
     ("echo x > ~/.claude/settings.json", FEAT, True),
     ("rm ~/.claude/hooks/guard-bash.py", FEAT, True),
-    ("echo x > ~/.codex/AGENTS.md", FEAT, True),
+    ("echo x > ~/.codex/AGENTS.md", FEAT, False),
     ("echo x > ~/.codex/hooks.json", FEAT, True),
     # A PROJECT-level settings.json defines hooks and permissions for that
     # project, so it grants control wherever it sits and stays shape-matched.
     ("echo x > ./.claude/settings.json", FEAT, True),
     ("rm ./.claude/hooks/mine.py", FEAT, True),
     ("echo x > ./.codex/hooks.json", FEAT, True),
-    # COVERAGE GAP that hid the over-block: every case used the real home, so
-    # a rule keyed on the SHAPE `.claude/CLAUDE.md` looked correct. It also
-    # matched a throwaway HOME, which is what an installer fixture is, and a
-    # second profile under CLAUDE_CONFIG_DIR. Instruction files grant no
-    # permissions; they are prose, and agent-init and /init write them.
+    # Instruction files grant no permissions, so they are never protected.
     ("echo x > /tmp/fakehome/.claude/CLAUDE.md", FEAT, False),
     ("echo x > /tmp/fakehome/.codex/AGENTS.md", FEAT, False),
     ("echo x > ./CLAUDE.md", FEAT, False),
@@ -2230,10 +2229,10 @@ CMD_CASES += [
     ('git filter-branch --force --index-filter "git rm -r --cached ." HEAD', FEAT, True),
     ('git update-ref -d refs/heads/feature/y', FEAT, True),
     ('git stash clear', FEAT, True),
-    ('git commit -m "fix"', MAIN, True),
-    ('git commit -am "fix"', MAIN, True),
-    ('git revert HEAD', MAIN, True),
-    ('git cherry-pick abc123', MAIN, True),
+    ('git commit -m "fix"', MAIN, STRICT),
+    ('git commit -am "fix"', MAIN, STRICT),
+    ('git revert HEAD', MAIN, STRICT),
+    ('git cherry-pick abc123', MAIN, STRICT),
     ('rm -rf ~', FEAT, True),
     ('rm -rf $HOME', FEAT, True),
     ('sudo rm -rf /*', FEAT, True),
@@ -2533,8 +2532,8 @@ CMD_CASES += [
     # file just as surely, and it is the commonest way an agent edits a file
     # from a shell. Found by an acceptance review, not by the suite.
     ("sed -i s/a/b/ ~/.claude/hooks/guard-bash.py", FEAT, True),
-    ("sed -i s/a/b/ ~/.claude/settings.json", FEAT, True),
-    ("sed -i s/a/b/ ./.claude/settings.json", FEAT, True),
+    ("sed -i s/a/b/ ~/.claude/settings.json", FEAT, False),
+    ("sed -i s/a/b/ ./.claude/settings.json", FEAT, False),
     ("sed -i s/a/b/ .git/hooks/pre-commit", FEAT, True),
     ("patch ~/.claude/hooks/guard-bash.py < d.diff", FEAT, True),
     # An interpreter's -e payload REPLACES the segment, so the path it rewrites
@@ -2635,4 +2634,57 @@ PATH_CASES += [
     (["/app/.env", "/a/safe.txt"], True, True),
     (["/a/safe.txt", "/b/other.txt"], True, False),
     ([], True, False),
+]
+
+CMD_CASES += [
+    # ---- real usage 2026-09: ordinary solo work the guard refused ----
+    # A directory held in a variable set earlier on the same line.
+    (f'C2={MAIN}; git -C $C2 commit --allow-empty -m "probe"', FEAT, STRICT, "commit directly to"),
+    (f'R={MAIN}; git -C $R push origin feat/x:feat/x', FEAT, STRICT, "push from 'main'"),
+    (f'WT={FEAT}; git -C "$WT" add docs && git -C "$WT" commit -q -m "docs: x"', MAIN, False),
+    (f'D={MAIN}\ngit -C $D fetch origin\ngit -C $D merge origin/dev --no-edit', FEAT, STRICT, "`git merge` directly to"),
+    (f'export D="{FEAT}"; cd ${{D}} && git commit -m x', MAIN, False),
+    # ...resolved, so a feature branch in the variable does not vouch for main.
+    (f'WT={FEAT}; git -C "$WT" commit -m x && git -C {MAIN} commit -m y', FEAT, STRICT, "commit directly to 'main'"),
+    # Still unknown: commit is local, push fails closed only in strict mode.
+    ('git -C "$UNSET" commit -m x', MAIN, False),
+    ('git -C "$UNSET" push origin x', MAIN, STRICT, "undeterminable"),
+    ('R=$(pwd)/x; git -C $R push', MAIN, STRICT, "undeterminable"),
+    # Force and deletion stay refused by default, variable or not.
+    (f'R={FEAT}; git -C $R push --force origin main', MAIN, True, "force push"),
+    ('git push origin +main', FEAT, True, "force push by refspec"),
+    ('git push --force-with-lease origin main', FEAT, True, "force-with-lease"),
+    ('git push origin :main', FEAT, True, "deleting the remote 'main'"),
+    ('git push --delete origin main', FEAT, True, "deleting the remote 'main'"),
+    ('git push origin -d master', FEAT, True, "deleting the remote 'master'"),
+    ('git branch -d main', FEAT, True, "deleting a protected branch"),
+    ('git branch --delete production', FEAT, True, "deleting a protected branch"),
+    ('git branch -d feature/main', FEAT, False),
+    ('git push origin HEAD:main', FEAT, STRICT, "pushing directly to 'main'"),
+    # Settings files are editable in place unless the edit names the hooks.
+    ("sed -i '/guard-bash/d' ~/.claude/settings.json", FEAT, True),
+    ("jq '.model=\"opus\"' ~/.claude/settings.json > /tmp/s && mv /tmp/s ~/.claude/settings.json", FEAT, False),
+    ("jq 'del(.hooks)' ~/.claude/settings.json > /tmp/s && mv /tmp/s ~/.claude/settings.json", FEAT, True),
+    ("jq . ~/.claude/settings.json > /tmp/s && rm ~/.claude/settings.json", FEAT, True),
+    ("mv /tmp/s ~/.claude/settings.json", FEAT, True),
+    ("rm ~/.claude/settings.json", FEAT, True),
+    ("sed -i s/a/b/ ~/.claude/hooks/guard_rules.py", FEAT, True),
+    ("rm -rf ~/.local/share/onbelay", FEAT, True),
+]
+
+PATH_CASES += [
+    # (path, writing, should_block, file-tool input)
+    (f"{HOME}/.claude/CLAUDE.md", True, False),
+    (f"{HOME}/.codex/AGENTS.md", True, False),
+    (f"{HOME}/.claude/settings.json", True, True),
+    (f"{HOME}/.claude/settings.json", True, False, {"old_string": '"model": "sonnet"', "new_string": '"model": "opus"'}),
+    (f"{HOME}/.claude/settings.json", True, True, {"old_string": '{"command": "python3 ~/.claude/hooks/guard-bash.py"}', "new_string": ""}),
+    (f"{HOME}/.claude/settings.local.json", True, False, {"edits": [{"old_string": '"allow": []', "new_string": '"allow": ["Bash(ls)"]'}]}),
+    (f"{HOME}/.claude/settings.json", True, True, {"edits": [{"old_string": "agent-config-hook-v1", "new_string": ""}]}),
+    (SETTINGS, True, False, {"content": SETTINGS_BODY.replace("sonnet", "opus")}),
+    (SETTINGS, True, True, {"content": '{"model": "opus"}'}),
+    (f"{HOME}/.codex/hooks.json", True, False, {"patch": '*** Update File: hooks.json\n@@\n-  "timeout": 5\n+  "timeout": 9\n'}),
+    (f"{HOME}/.codex/hooks.json", True, True, {"patch": '*** Update File: hooks.json\n@@\n-  "command": "python3 guard-codex.py"\n'}),
+    (f"{HOME}/.claude/hooks/guard-bash.py", True, True, {"old_string": "a", "new_string": "b"}),
+    (f"{HOME}/.local/share/agent-config/0.3.0/hooks/guard_rules.py", True, True, {"content": "x"}),
 ]

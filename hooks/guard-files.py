@@ -57,7 +57,7 @@ def main():
     # EVERY path, not just the first. A list whose secret sat at index 1 was
     # allowed, and the same list reversed was blocked.
     for p in paths:
-        hit = verdict(guard_rules.check_path, p, writing)
+        hit = verdict(guard_rules.check_path, p, writing, payload.get("tool_input"))
         if hit:
             block(*hit)
     sys.exit(0)

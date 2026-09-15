@@ -352,3 +352,12 @@ git diff hooks/guard_rules.py
 sed -n '1,40p' hooks/guard_git.py
 cp hooks/guard_rules.py /tmp/inspect.py
 python3 -c "import sys; sys.path.insert(0,'hooks'); import guard_rules"
+C2=/Users/me/projects/app/.scratch/clone-2; git -C $C2 commit --allow-empty -m "probe"
+R=/Users/me/projects/app; git -C $R push origin feat/x:feat/x
+WT=/private/tmp/work/wt-docs; git -C "$WT" add docs && git -C "$WT" commit -q -m "docs: update"
+D=/Users/me/clone-12; git -C $D fetch origin && git -C $D merge origin/dev --no-edit
+git push origin main
+git commit -am "fix: typo"
+git merge feature/x
+sed -i '' 's/"model": "sonnet"/"model": "opus"/' ~/.claude/settings.json
+echo "- prefer uv" >> ~/.claude/CLAUDE.md

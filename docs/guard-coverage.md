@@ -53,6 +53,7 @@ argument. Read them before reporting a bypass.
 ### Git
 
 - defining a git alias (an alias runs a different command than the one written)
+- deleting a protected branch
 - deleting a ref directly
 - dropping stashed work
 - force-removing a worktree with live changes
@@ -113,8 +114,8 @@ argument. Read them before reporting a bypass.
 
 | Measure | Count |
 |---|---|
-| Commands refused | 904 |
-| Ordinary commands allowed | 752 |
-| Path cases | 32 |
+| Commands refused | 802 |
+| Ordinary commands allowed | 884 |
+| Path cases | 45 |
 | Red-team candidates leaking untriaged | 0, or CI fails |
 <!-- END GENERATED -->

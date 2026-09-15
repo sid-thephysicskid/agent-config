@@ -38,16 +38,12 @@ MIDDLE_SIGNALS = (
 _GIT_CONTROL = re.compile(
     r"(^|/)\.git/(config|COMMIT_EDITMSG|HEAD|refs(?:/|$)|hooks(?:/|$))")
 
-# Matched on SHAPE, anywhere: a project-level `.claude/settings.json` defines
-# hooks and permissions for that project, so it grants control wherever it
-# sits. Instruction files are deliberately NOT here. CLAUDE.md and AGENTS.md
-# grant no permissions, they are prose, and `agent-init` and `/init` write
-# them as ordinary work. Protecting them by shape refused writing a throwaway
-# installer fixture and a second profile under CLAUDE_CONFIG_DIR. The live
-# ones are still protected, by location, in the loop below.
-GUARD_OWN_FILES = re.compile(
-    r"(^|/)\.(claude|codex)/(hooks(?:/|$)|settings\.json$|settings\.local\.json$"
-    r"|hooks\.json$)")
+# Matched on SHAPE, anywhere. Instruction files (CLAUDE.md, AGENTS.md) are prose and never protected.
+GUARD_OWN_FILES = re.compile(r"(^|/)\.(claude|codex)/hooks(?:/|$)")
+# Settings files that wire the guard in: editable, as long as the guard's own hook entries survive.
+GUARD_CONFIG = re.compile(
+    r"(^|/)\.(claude|codex)/(settings\.json|settings\.local\.json|hooks\.json)$")
+GUARD_HOOK = re.compile(r"guard-(?:bash|files|codex)\.py|(?:agent-config|onbelay)-hook-v1")
 
 
 # The npm install, which the README recommends, COPIES the payload to
@@ -66,30 +62,51 @@ GUARD_OWN_FILES = re.compile(
 PAYLOAD_ROOT = "~/.local/share/agent-config"
 
 
-def _is_guard_control_path(path):
+def _guard_kind(path):
+    """'script' for the guard's own code, 'config' for a settings file that wires it in, else None."""
+    for payload in (PAYLOAD_ROOT, "~/.local/share/onbelay"):
+        payload, expanded = normalize_path(payload), normalize_path(path)
+        if expanded == payload or expanded.startswith(payload + "/"):
+            return "script"
     if GUARD_OWN_FILES.search(path):
-        return True
-    # Defaults, not just the env vars: without them the live global
-    # instruction file was only protected when CLAUDE_CONFIG_DIR was set.
+        return "script"
+    if GUARD_CONFIG.search(path):
+        return "config"
     roots = (
-        ("CLAUDE_CONFIG_DIR", "~/.claude",
-         ("hooks", "settings.json", "settings.local.json", "CLAUDE.md")),
-        ("CODEX_HOME", "~/.codex", ("hooks", "hooks.json", "AGENTS.md")),
+        ("CLAUDE_CONFIG_DIR", "~/.claude", ("settings.json", "settings.local.json")),
+        ("CODEX_HOME", "~/.codex", ("hooks.json",)),
     )
-    payload = normalize_path(PAYLOAD_ROOT)
-    expanded_payload = normalize_path(path)
-    if expanded_payload == payload or expanded_payload.startswith(payload + "/"):
-        return True
-    for variable, default, managed in roots:
+    for variable, default, config in roots:
         root = os.environ.get(variable) or default
         expanded = path.replace("${%s}" % variable, root).replace("$%s" % variable, root)
         expanded = normalize_path(expanded)
         base = normalize_path(root)
-        if any(expanded == base + "/" + name
-               or expanded.startswith(base + "/" + name + "/")
-               for name in managed):
-            return True
-    return False
+        if expanded == base + "/hooks" or expanded.startswith(base + "/hooks/"):
+            return "script"
+        if any(expanded == base + "/" + name for name in config):
+            return "config"
+    return None
+
+
+def _drops_guard_hooks(p, change):
+    """Would this file-tool change remove or alter the guard's hook entries? Unknown content counts as yes."""
+    if not isinstance(change, dict):
+        return True
+    if isinstance(change.get("patch"), str):
+        return bool(re.search(r"^-.*(?:%s)|^\*\*\* Delete File:" % GUARD_HOOK.pattern,
+                              change["patch"], re.M))
+    olds = [change.get("old_string")] + [
+        e.get("old_string") for e in change.get("edits") or () if isinstance(e, dict)]
+    olds = [o for o in olds if isinstance(o, str)]
+    if "content" in change:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                current = fh.read()
+        except (OSError, ValueError):
+            current = ""
+        return bool(set(GUARD_HOOK.findall(current))
+                    - set(GUARD_HOOK.findall(str(change["content"]))))
+    return not olds or any(GUARD_HOOK.search(o) for o in olds)
 
 
 # Commands that unmake or overwrite a file. Writing to the guard is caught by
@@ -113,7 +130,7 @@ _UNMAKE_IN_PLACE = re.compile(
     r"|patch\b)")
 
 
-def check_guard_mutation(seg):
+def check_guard_mutation(seg, line=None):
     """Deleting, moving or overwriting a file that grants control.
 
     `uninstall.sh` is unaffected: the hook sees `bash uninstall.sh`, and the
@@ -139,9 +156,16 @@ def check_guard_mutation(seg):
         return None
     args = [t for t in tokens(text) if not t.startswith("-")]
     targets = args if all_args else args[-1:]
+    # In place (`sed -i`, or `jq ... > tmp && mv tmp settings.json`) keeps the file; allowed unless it names the hooks.
+    verbs = {m.group(2) for m in _UNMAKE_ALL_ARGS.finditer(shell)}
+    whole = str(line or text)
+    in_place = not last_arg and (verbs <= {"mv"} if re.search(r"(^|[\s;&|(])jq\b", whole) else not verbs)
     for tok in targets:
         p = normalize_path(tok.strip("'\""))
-        if _is_guard_control_path(p) or _GIT_CONTROL.search(p):
+        kind = _guard_kind(p)
+        if kind == "config" and in_place and not re.search(r"hook|guard", whole, re.I):
+            continue
+        if kind or _GIT_CONTROL.search(p):
             return (f"removing or overwriting '{tok}', which grants control "
                     "rather than storing data.",
                     "if a rule is wrong, change it in the repo and tell the human; "
@@ -149,15 +173,15 @@ def check_guard_mutation(seg):
     return None
 
 
-def check_path(path, writing):
-    """Rules for reading or writing a file path. Returns (reason, fix) or None."""
+def check_path(path, writing, change=None):
+    """Rules for reading or writing a file path. `change` is the file tool's input. Returns (reason, fix) or None."""
     if isinstance(path, (list, tuple)):
         # Every element, not the first. Taking path[0] made the verdict depend
         # on ORDER, so a secret in second position was invisible while the same
         # two paths swapped blocked. Both adapters happen to iterate, which is
         # the only reason this never shipped as a hole.
         for one in path:
-            hit = check_path(one, writing)
+            hit = check_path(one, writing, change)
             if hit:
                 return hit
         return None
@@ -175,10 +199,10 @@ def check_path(path, writing):
         return (f"attempt to {verb} '{path}', which holds live credentials.",
                 "use the .example variant for variable names. If you need a value set, "
                 "ask the human to set it; never read or print the real one.")
-    return check_control_path(p, path) if writing else None
+    return check_control_path(p, path, change) if writing else None
 
 
-def check_control_path(p, shown=None):
+def check_control_path(p, shown=None, change=None):
     """Writes that hand over control rather than storing data.
 
     Kept apart from the credential rules because a shell redirect asks this
@@ -193,8 +217,12 @@ def check_control_path(p, shown=None):
     if _GIT_CONTROL.search(p):
         return (f"direct write into .git internals ('{shown}').",
                 "use the matching git command instead of editing plumbing by hand")
-    if _is_guard_control_path(p):
-        return (f"write to '{shown}', which is the guard's own configuration.",
+    kind = _guard_kind(p)
+    if kind == "script":
+        return (f"write to '{shown}', which is the guard's own code.",
                 "if a rule is wrong, change it in the repo and re-run install.sh, "
                 "and tell the human rather than editing the installed copy")
+    if kind == "config" and _drops_guard_hooks(p, change):
+        return (f"write to '{shown}' that could remove the guard's own hook entries.",
+                "use Edit on the setting you mean and leave the guard's hook entries in place")
     return None

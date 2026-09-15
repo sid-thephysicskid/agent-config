@@ -34,11 +34,11 @@
 #                    out of scope under the careless-agent threat model. 
 #                    fold_constant_substitutions was cut on 2026-08-08
 #
-git push --for\ce origin feature/x
+git push --for\ce origin feature/x	OPEN: #obfuscation
 git reset --har\d HEAD~3	OPEN: #obfuscation
 git clean -\fd	OPEN: #obfuscation
 git branch -\D unmerged	OPEN: #obfuscation
-git push $'\x2d\x2dforce' origin feature/x
+git push $'\x2d\x2dforce' origin feature/x	OPEN: #obfuscation
 rm $'\x2drf' /var/www	OPEN: #obfuscation
 psql -h db.example.com -c $'DELETE\x20FROM users'	OPEN: #obfuscation
 echo a\ #note ; rm -rf /var/www
@@ -71,7 +71,7 @@ git update-ref refs/heads/main HEAD
 git reflog delete --rewrite HEAD@{0}	OPEN: #git-verb
 git pull --no-rebase origin feature/x	OPEN: #git-verb
 git-push --force origin main	OPEN: the hyphenated dispatch form of git, which no modern git installs
-false && git checkout -b feature/tmp ; git commit -am pwn	OPEN: the branch creation is skipped by the shell, so this is a plain commit on a protected branch and IS blocked when the fixture is on one
+false && git checkout -b feature/tmp ; git commit -am pwn	OPEN: the branch creation is skipped by the shell, so this is a plain commit on a protected branch and IS blocked in strict mode (AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1)
 gh api -X PUT repos/o/r/contents/README.md -f message=x -f content=eA==	OPEN: #rest-api
 gh api --method PATCH repos/o/r/git/refs/heads/main -f sha=abc123 -F force=true	OPEN: #rest-api
 gh api -X PUT repos/o/r/pulls/12/merge	OPEN: #rest-api

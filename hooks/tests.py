@@ -13,9 +13,10 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guard_git  # noqa: E402
 import guard_parse  # noqa: E402
 import guard_rules  # noqa: E402
-from cases import CMD_CASES, PATH_CASES  # noqa: E402
+from cases import CMD_CASES, PATH_CASES, STRICT  # noqa: E402
 from fixtures import FEAT, MAIN  # noqa: E402
 
 
@@ -229,6 +230,30 @@ def test_segment_rules_are_named():
     return wrong
 
 
+def test_strict_mode():
+    """STRICT cases are allowed by default and refused with AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1."""
+    bad = []
+    guard_git.BLOCK_DIRECT_COMMITS = True
+    try:
+        for case in CMD_CASES:
+            if case[2] is not STRICT:
+                continue
+            hit = guard_rules.check_command(case[0], case[1])
+            if not hit:
+                bad.append(f"  should BLOCK in strict mode: {case[0]}")
+            elif len(case) > 3 and case[3].lower() not in hit[0].lower():
+                bad.append(f"  strict mode blocked for the WRONG reason: {case[0]}")
+    finally:
+        guard_git.BLOCK_DIRECT_COMMITS = False
+    env = dict(os.environ, AGENT_CONFIG_BLOCK_DIRECT_COMMITS="1")
+    out = subprocess.run([sys.executable, "-c", "import guard_git; print(guard_git.BLOCK_DIRECT_COMMITS)"],
+                         cwd=os.path.dirname(os.path.abspath(__file__)), env=env,
+                         capture_output=True, text=True).stdout.strip()
+    if out != "True":
+        bad.append("  AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1 did not turn strict mode on")
+    return bad
+
+
 def test_git_call_budget():
     """Subprocess COUNT, not wall clock.
 
@@ -359,6 +384,7 @@ def main():
     # It also matters for mutation testing: counting a timing flake as a "kill"
     # made the guard's apparent mutation score roughly twice its real one.
     perf = "--no-perf" not in sys.argv
+    guard_git.BLOCK_DIRECT_COMMITS = False
     fails = []
     for case in CMD_CASES:
         # A fourth element pins WHICH rule fired, as a substring of the reason.
@@ -366,13 +392,13 @@ def main():
         # second, unrelated rule also blocked: a mutation pass found the short
         # `-f` force-push spelling deletable with the suite still green,
         # because on a protected branch the branch rule caught it anyway.
-        cmd, cwd, should = case[0], case[1], case[2]
+        cmd, cwd, should = case[0], case[1], case[2] is True
         want_reason = case[3] if len(case) > 3 else None
         hit = guard_rules.check_command(cmd, cwd)
         got = hit is not None
         if got != should:
             fails.append(f"  {'should BLOCK' if should else 'should ALLOW'}: {cmd}")
-        elif want_reason and want_reason.lower() not in hit[0].lower():
+        elif hit and want_reason and want_reason.lower() not in hit[0].lower():
             fails.append(f"  blocked for the WRONG reason: {cmd}\n"
                          f"      wanted {want_reason!r} in {hit[0]!r}")
         # Same command, argv-shaped. A host may hand over ["bash","-lc",cmd]
@@ -386,12 +412,13 @@ def main():
                 fails.append(f"  argv form disagrees with the string form: {cmd}\n"
                              f"      string={'BLOCK' if got else 'allow'} "
                              f"argv={'BLOCK' if argv else 'allow'}")
-    for path, writing, should in PATH_CASES:
-        got = guard_rules.check_path(path, writing) is not None
+    for path, writing, should, *change in PATH_CASES:
+        got = guard_rules.check_path(path, writing, *change) is not None
         if got != should:
             fails.append(f"  {'should BLOCK' if should else 'should ALLOW'}: path {path}")
 
     fails += test_ordinary_work_is_never_refused()
+    fails += test_strict_mode()
     fails += test_git_call_budget()
     for name in test_every_db_wipe_rule_is_reachable():
         fails.append(f"  DB_WIPE_RULES row {name!r} is unreachable: no command fires it")
@@ -425,6 +452,7 @@ def main():
     # this suite had made up. A suite that miscounts itself has no business
     # grading anything else.
     total = (len(CMD_CASES) + len(PATH_CASES) + len(ordinary_commands())
+             + sum(1 for c in CMD_CASES if c[2] is STRICT) + 1
              + len(guard_rules.DB_WIPE_RULES) + len(guard_rules.SEGMENT_RULES)
              + 2 * len(guard_parse.RUNNER_NAMES) + len(OVERSIZE_PROBES)
              + (PERF_ASSERTIONS if perf else 0))

@@ -33,8 +33,8 @@ LISTS = (
     ("Database destruction", [r.reason for r in guard_db.DB_WIPE_RULES]),
 )
 COUNTS = (
-    ("Commands refused", sum(1 for c in cases.CMD_CASES if c[2])),
-    ("Ordinary commands allowed", sum(1 for c in cases.CMD_CASES if not c[2])),
+    ("Commands refused", sum(1 for c in cases.CMD_CASES if c[2] is True)),
+    ("Ordinary commands allowed", sum(1 for c in cases.CMD_CASES if c[2] is not True)),
     ("Path cases", len(cases.PATH_CASES)),
 )
 

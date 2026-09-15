@@ -137,7 +137,8 @@ def main():
                       str(raw_input)[:200])
         guard_rules = load_rules()
         for candidate in paths:
-            hit = verdict(guard_rules.check_path, candidate, True)
+            hit = verdict(guard_rules.check_path, candidate, True,
+                          {"patch": raw_input if isinstance(raw_input, str) else cmd})
             if hit:
                 block(*hit)
         sys.exit(0)
@@ -164,7 +165,7 @@ def main():
         for p in paths:
             if not p:
                 continue
-            hit = verdict(guard_rules.check_path, str(p), writing)
+            hit = verdict(guard_rules.check_path, str(p), writing, raw_input)
             if hit:
                 block(*hit)
     sys.exit(0)

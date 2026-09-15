@@ -115,6 +115,28 @@ depth_guard = [0]
 CD_PREFIX = re.compile(
     r"^(?:cd|pushd)(?:\s+(?:-[LP]|--))*\s+(?P<dir>'[^']+'|\"[^\"]+\"|[^\s>&]+)"
     r"(?:\s+\d?>[>&]?\s*\S+)*\s*$")
+_ASSIGN = re.compile(
+    r"(?:^|[;&\n])\s*(?:export\s+)?([A-Za-z_]\w*)="
+    r"('[^'\n]*'|\"[^\"\n]*\"|[^\s;&|'\"`()<>]+)(?=\s*(?:[;&\n]|$))")
+_DIR_VAR = re.compile(
+    r"((?:\s-C|(?:^|[;&|\n(])\s*cd)\s+)(\"?)\$(\{)?([A-Za-z_]\w*)(?(3)\})\2(?=[\s;&|)]|$)")
+
+
+def _resolve_dir_vars(cmd):
+    """`R=/x; git -C $R push`: substitute literal assignments made earlier on the line."""
+    found = [(m.start(), m.group(1), m.group(2).strip("'\"")) for m in _ASSIGN.finditer(cmd)]
+    if not found:
+        return cmd
+
+    def sub(m):
+        vals = [v for pos, name, v in found if name == m.group(4) and pos < m.start()]
+        if not vals:
+            return m.group(0)
+        v = re.sub(r"\$\{?HOME\}?(?=/|$)", "~", vals[-1])
+        return m.group(0) if re.search(r"[$`\s]", v) or not v else m.group(1) + v
+    return _DIR_VAR.sub(sub, cmd)
+
+
 # popd returns somewhere we did not track, so treat it as unknown.
 POPD = re.compile(r"^popd\b")
 
@@ -503,7 +525,7 @@ def _phase_writes(line, idx):
     # RAW, not seg. For an interpreter the segment may have been replaced
     # by its `-e` PAYLOAD, so `perl -pi -e s/a/b/ <guard file>` arrived here
     # as the program `s/a/b/` with the path it rewrites already gone.
-    return check_guard_mutation(line.raw)
+    return check_guard_mutation(line.raw, line.cmd)
 
 
 def _phase_rules(line, idx):
@@ -569,6 +591,7 @@ def check_command(cmd, cwd=None):
     # segment splitters, so `rm -rf $(pwd)` arrived as `rm -rf $` plus `pwd` and
     # no rule ever saw a path. Normalise to the spelling the rules understand.
     cmd = re.sub(r"\$\(\s*pwd\s*\)|`\s*pwd\s*`", "$PWD", cmd)
+    cmd = _resolve_dir_vars(cmd)
 
     # Resolve what can be resolved. Both of these put the dangerous word behind
     # something the rules do not evaluate, and the answer is to evaluate it

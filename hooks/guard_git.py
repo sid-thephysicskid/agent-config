@@ -22,22 +22,14 @@ from guard_parse import (  # noqa: F401
     tokens,
 )
 
-# Overridable, because the hardcoded list is wrong in both directions for real
-# teams. A solo engineer working on `main` in their own repository had no escape
-# but uninstalling, and a team whose protected branch is `develop` or `staging`
-# got no protection at all.
-#
-# Read from the environment the HOOK runs in, which is the user's session, not
-# a shell an agent spawns: a `export` inside one tool call does not reach the
-# next hook process, so this is a decision the human makes in their profile
-# rather than a switch the agent can flip mid-task. Empty disables the branch
-# rules entirely, which is a choice the user is allowed to make and which
-# `--check` reports so it cannot be forgotten.
+# Read from the hook's environment (the user's profile), so an agent's `export` cannot change it.
 _DEFAULT_PROTECTED = ("main", "master", "trunk", "release", "production", "prod")
 _override = os.environ.get("AGENT_CONFIG_PROTECTED_BRANCHES")
 PROTECTED_BRANCHES = (
     {b.strip() for b in _override.split(",") if b.strip()}
     if _override is not None else set(_DEFAULT_PROTECTED))
+# Opt-in: also refuse plain commits, merges and pushes on the protected set.
+BLOCK_DIRECT_COMMITS = os.environ.get("AGENT_CONFIG_BLOCK_DIRECT_COMMITS") == "1"
 
 # The three ref-MOVING rules below need the protected set as a regex
 # alternation. They used to carry a hand-typed copy of _DEFAULT_PROTECTED
@@ -98,8 +90,7 @@ COMMIT_MAKING = {"commit", "merge", "revert", "cherry-pick", "am"}
 #   --continue/--abort/--skip/--quit  finish or unwind something in flight, and
 #                                     blocking them strands the user with no
 #                                     legal exit, which /unstick depends on.
-#                                     `--continue` is therefore a known hole,
-#                                     pinned as one in evals/guard_claims.json
+#                                     `--continue` is therefore a known hole
 #   --ff-only                         fast-forward writes no new history; this
 #                                     is how you sync a protected branch, and
 #                                     blocking the safe spelling while `git
@@ -307,6 +298,9 @@ DESTRUCTIVE_GIT = (
     # spellings still block without them: leftover, not defence in depth.
     (r"\bbranch\s+(-\w*D\b|--delete\b[^\n]{0,40}--force\b|--force\b[^\n]{0,40}--delete\b)", "git branch -D (force-deletes an unmerged branch)",
      "git branch -d  (refuses if unmerged, which is the point)"),
+    (r"\bbranch\s+(-\w*d\b|--delete\b)[^\n]{0,40}(?<![\w./-])(?:" + _PROT_ALT + r")(?![\w./-])",
+     "deleting a protected branch",
+     "delete the feature branch you meant, or ask the human"),
     # `--mirror` makes the remote exactly match local refs: it force-updates
     # every branch and deletes the ones you do not have. The README
     # promises "force push in any form", and this is the most total form.
@@ -465,7 +459,8 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
         # cost more than the rule is worth.
         if not any(w in seg for w in ("version", "release", "bump")):
             return None
-        if VERSION_BUMPER.search(seg) and not unknown_cwd and is_git_repo(cwd) \
+        if BLOCK_DIRECT_COMMITS and VERSION_BUMPER.search(seg) \
+                and not unknown_cwd and is_git_repo(cwd) \
                 and current_branch(cwd) in PROTECTED_BRANCHES:
             return ("a version bump that commits and tags, on a protected branch.",
                     "bump on your feature branch, or cut the release from the "
@@ -503,9 +498,8 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
             branch = branch_override if (branch_override and not repo) else current_branch(target)
 
         no_repo = not unknown_cwd and not is_git_repo(target)
-        # Unknown branch fails CLOSED: a bad path must not drop protection.
-        # No repo here means no branch to protect; unknown still fails closed.
-        on_protected = False if no_repo else ((branch in PROTECTED_BRANCHES) if branch else True)
+        # Unknown branch: a commit is local and reversible, so only a push fails closed.
+        on_protected = not no_repo and branch in PROTECTED_BRANCHES
 
         # A detached HEAD is not a protected branch, but a commit made there is
         # orphaned by the next checkout, which is a worse outcome than the one
@@ -525,18 +519,12 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
         # strip_quoted, not the raw segment: matching the message let
         # `git commit -m "fix: handle --abort path"` through on main, and that
         # is an ordinary thing for a message to say.
-        if sub in COMMIT_MAKING and on_protected \
-                and not _exempt_from_branch_rule(sub, strip_quoted(seg)):
-            # An unborn HEAD makes `rev-parse --abbrev-ref` fail, so branch is
-            # None here even though the repo is fine. Key off the commit count,
-            # not the branch name, or bootstrap's first commit is blocked.
-            if target in virgin_dirs or is_virgin_repo(target):
-                pass  # a repo with no commits has no history to protect
-            else:
-                where = branch or "an undeterminable branch"
-                verb = "commit" if sub == "commit" else f"`git {sub}`"
-                return (f"{verb} directly to '{where}'.",
-                        "git checkout -b feature/<name>   (branch there, then open a PR)")
+        if BLOCK_DIRECT_COMMITS and sub in COMMIT_MAKING and on_protected \
+                and not _exempt_from_branch_rule(sub, strip_quoted(seg)) \
+                and not (target in virgin_dirs or is_virgin_repo(target)):
+            verb = "commit" if sub == "commit" else f"`git {sub}`"
+            return (f"{verb} directly to '{branch}'.",
+                    "git checkout -b feature/<name>   (branch there, then open a PR)")
 
         if sub == "push":
             # A dry-run push sends nothing, so every push rule below is moot
@@ -567,16 +555,21 @@ def check_git(seg, cwd, branch_override=None, unknown_cwd=False, virgin_dirs=())
             if re.search(r"(^|[\s'\"])\+[\w./-]", seg):
                 return ("force push by refspec (the leading + forces it).",
                         "push normally, or --force-with-lease on your own branch")
+            deleting = "--delete" in push_args or "-d" in push_args
             for b in (() if push_scanned else PROTECTED_BRANCHES):
-                if re.search(rf"(--delete\s+|:){re.escape(b)}(\s|$)", seg) \
-                   or re.search(rf":refs/heads/{re.escape(b)}(\s|$)", seg):
-                    return (f"pushing directly to or deleting '{b}' by refspec.", "open a PR instead")
+                if (":" + b) in push_args or (deleting and b in push_args):
+                    return (f"deleting the remote '{b}' branch.",
+                            "delete a feature branch instead, or ask the human")
+                if not BLOCK_DIRECT_COMMITS:
+                    continue
+                if re.search(rf":{re.escape(b)}(\s|$)", seg):
+                    return (f"pushing directly to '{b}' by refspec.", "open a PR instead")
                 # `git push origin main` from anywhere
                 if re.search(rf"\bpush\b[^|;]*\s{re.escape(b)}(\s|$)", seg) and "HEAD:" not in seg:
                     return (f"pushing directly at '{b}'.",
                             "push your feature branch and open a PR")
             push_scanned = True
-            if on_protected:
+            if BLOCK_DIRECT_COMMITS and (on_protected or (branch is None and not no_repo)):
                 where = branch or "an undeterminable branch"
                 return (f"push from '{where}'.",
                         "push a feature branch and open a PR: git push -u origin feature/<name>")
