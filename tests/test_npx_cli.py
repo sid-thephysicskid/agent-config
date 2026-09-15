@@ -65,6 +65,7 @@ class NpxCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             for args in (("install", "--extras"), ("install", "--dry-run"), ("init",)):
                 self.assertNotEqual(self.run_cli(home, *args, check=False).returncode, 0, args)
+            self.assertIn("agent-config install", self.run_cli(home, "init", check=False).stderr)
             self.assertFalse(os.path.exists(os.path.join(home, ".local")))
 
     def test_pack_contains_the_payload_and_nothing_private(self):

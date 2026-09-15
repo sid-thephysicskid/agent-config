@@ -1,5 +1,7 @@
 # agent-config
 
+> **Update:** this used to ship workflow skills and an `AGENTS.md` setup too. They were too opinionated, so I pulled them out. It's just the guardrails now. For skills, [mattpocock/skills](https://github.com/mattpocock/skills) is great.
+
 Coding agents are great until one runs `docker compose down -v` on your dev database. Or force-pushes over your repo. Or `rm -rf ~/`. All of that actually happened to people.
 
 This is a hook that stops that stuff before it runs. Everything else goes through.

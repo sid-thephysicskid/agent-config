@@ -207,6 +207,8 @@ try {
     process.stdout.write(`${version}\n`);
   } else if (Object.hasOwn(commands, command)) {
     await commands[command](args);
+  } else if (command === "init") {
+    fail("init was removed with the skills in 0.5.0. The guardrails install with: agent-config install");
   } else {
     fail(`unknown command: ${command}`);
   }
