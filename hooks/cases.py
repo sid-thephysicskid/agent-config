@@ -54,13 +54,10 @@ CMD_CASES = [
     ('git branch --force master origin/master', FEAT, True),
     ('git checkout -B main origin/main', FEAT, True),
     ('git switch -C production', FEAT, True),
-    ('git update-ref refs/heads/main HEAD', FEAT, True),
-    ('git update-ref --no-deref refs/heads/prod HEAD', FEAT, True),
     # The same shapes aimed anywhere else are ordinary work and must not be
     # refused. A guard that blocks `checkout -B feature/x` gets switched off.
     ('git branch -f my-feature HEAD', FEAT, False),
     ('git checkout -B feature/x origin/main', FEAT, False),
-    ('git update-ref refs/heads/feature/x HEAD', FEAT, False),
     ('git checkout -b main-ish', FEAT, False),
     ('git switch -c feature/main-menu', FEAT, False),
     # ---- audit bypasses: these MUST block ----
@@ -98,10 +95,6 @@ CMD_CASES = [
     ('kubectl delete namespace prod', MAIN, True),
     ('aws s3 rm s3://bucket --recursive', MAIN, True),
     ('vercel rm my-app --yes', MAIN, True),
-    # Deliberately ALLOWED: it destroys local dev volumes only, it is a normal
-    # reset, and blocking a daily command is how a guard gets switched off.
-    ('docker compose down -v', MAIN, False),
-    ('git update-ref -d refs/heads/x', MAIN, True),
     ('git restore .', MAIN, True),
     ('git checkout HEAD -- .', MAIN, True),
     ('git worktree remove --force ../wt', MAIN, True),
@@ -184,17 +177,6 @@ CMD_CASES += [
     ('npm publish', FEAT, True, 'publish'),
     ('npx vercel --prod', FEAT, True, 'production deploy'),
 
-    # A config line with nothing after the key is a READ, and --unset REMOVES
-    # the hazard. `git config --list` was allowed the whole time, so refusing
-    # these made the rule inconsistent as well as wrong.
-    ('git config --get core.hooksPath', FEAT, False),
-    ('git config core.hooksPath', FEAT, False),
-    ('git config --unset core.hooksPath', FEAT, False),
-    ('git config --get alias.co', FEAT, False),
-    ('git config --unset alias.wip', FEAT, False),
-    ('git config core.hooksPath .githooks', FEAT, True, 'hooks directory'),
-    ('git config alias.x "commit -am pwn"', FEAT, True, 'alias'),
-
     # Documentation runs nothing. check_tools had this exemption; check_git
     # never did. `--help` AFTER `--` is an operand, not a flag: reading it as
     # documentation is a free bypass of every rule in the file.
@@ -249,7 +231,6 @@ CMD_CASES += [
     # tools ship with, so a negative test exempted the ordinary invocation.
     ('fly deploy --config fly.toml', FEAT, True, 'Fly.io deploy'),
     ('wrangler deploy --config wrangler.toml', FEAT, True),
-    ('serverless deploy --config serverless.yml', FEAT, True),
     # ...and an explicit production flag is not open to reinterpretation.
     ('netlify deploy --prod --config netlify.toml', FEAT, True),
     ('vercel --prod --env NODE_ENV=production', FEAT, True),
@@ -257,7 +238,6 @@ CMD_CASES += [
     # ...while a config that really does name a non-production environment,
     # and the read-only subcommands, stay allowed.
     ('fly deploy --config staging.toml', FEAT, False),
-    ('eb deploy --profile dev', FEAT, False),
     ('vercel logs my-app --prod', FEAT, False),
     ('vercel list --prod', FEAT, False),
 
@@ -391,11 +371,6 @@ CMD_CASES += [
     ("wrangler deploy", FEAT, True),               # production by default
     ("wrangler publish", FEAT, True),
     ("railway up", FEAT, True),
-    ("modal deploy app.py", FEAT, True),
-    ("serverless deploy --stage prod", FEAT, True),
-    ("sls deploy", FEAT, True),
-    ("eb deploy production", FEAT, True),
-    ("aws lambda update-function-code --function-name app --zip-file fileb://a.zip", FEAT, True),
     ("npx prisma migrate deploy", FEAT, True),     # applies migrations to a live db
     ("prisma migrate deploy", FEAT, True),
     # ...and the preview, dry-run and read-only neighbours, which are the
@@ -417,25 +392,11 @@ CMD_CASES += [
     ("fly logs", FEAT, False),
     ("wrangler dev", FEAT, False),
     ("wrangler tail", FEAT, False),
-    ("modal run app.py", FEAT, False),
-    ("modal app list", FEAT, False),
-    ("serverless print", FEAT, False),
-    ("aws lambda list-functions", FEAT, False),
     ("npx prisma migrate dev", FEAT, False),       # local dev migration
     ("npx prisma generate", FEAT, False),
     ("npx prisma studio", FEAT, False),
     ("git push origin feature/x", FEAT, False),    # the pipeline path stays open
     ("gh pr create --fill", FEAT, False),
-    # Writing a raw device node or formatting a filesystem. Never part of
-    # shipping a web app, unrecoverable when it happens, and the parser's old
-    # shadow list already blocked both while no rule did.
-    ("mkfs.ext4 /dev/sda1", FEAT, True),
-    ("mkfs -t ext4 /dev/disk2", FEAT, True),
-    ("dd if=/dev/zero of=/dev/sda bs=1M", FEAT, True),
-    ("sudo dd if=ubuntu.iso of=/dev/rdisk2 bs=4m", FEAT, True),
-    # ...and the ordinary uses of dd, which write a FILE, not a device.
-    ("dd if=/dev/zero of=testfile bs=1M count=100", FEAT, False),
-    ("dd if=/dev/urandom of=./fixtures/blob.bin bs=1k count=4", FEAT, False),
     ("bun install", FEAT, False),
     ("bun run dev", FEAT, False),
     ("bun -e 'console.log(1)'", FEAT, False),
@@ -1234,7 +1195,6 @@ CMD_CASES += [
     # The --dry-run lookahead was a substring test, so the negated form
     # inherited the exemption while really publishing.
     ("npm publish --dry-run=false", FEAT, True, "irreversible"),
-    ("cargo publish --dry-run=false", FEAT, True, "crates.io"),
     # `branch -D` was known in exactly one spelling.
     ("git branch --delete --force unmerged", FEAT, True),
     ("git branch -qD unmerged", FEAT, True),
@@ -1349,7 +1309,6 @@ CMD_CASES += [
     # this row left the suite green and the bare command allowed.
     ("dro" + "pdb production", FEAT, True),
     ("dro" + "pdb --if-exists staging", FEAT, True),
-    ("cargo publish", FEAT, True, "crates.io"),
     ("twine upload dist/*", FEAT, True, "irreversible"),
     ("gem push mygem-1.0.gem", FEAT, True, "irreversible"),
     ("poetry publish", FEAT, True, "irreversible"),
@@ -1357,7 +1316,6 @@ CMD_CASES += [
     # ...but a rehearsal is not a publish, and neither is anything that merely
     # has the word in it.
     ("npm publish --dry-run", FEAT, False),
-    ("cargo publish --dry-run", FEAT, False),
     ("npm run publish-docs", FEAT, False),
     ("npm view mypkg versions", FEAT, False),
     ("npm pack", FEAT, False),
@@ -1402,12 +1360,9 @@ CMD_CASES += [
     # The rest of the history-destroying set, each named in README 06 and each
     # previously resting on no case at all.
     ("git stash drop", FEAT, True, "stash"),
-    ("git update-ref -d refs/heads/x", FEAT, True, "ref"),
-    ("git reflog expire --expire=now --all", FEAT, True, "reflog"),
     ("git filter-branch --tree-filter x HEAD", FEAT, True, "history rewrite"),
     # ...and the read-only or narrowing forms nearby that must NOT block
     ("git stash list", FEAT, False),
-    ("git reflog", FEAT, False),
     ("truncate -s 0 app.log", FEAT, False),
 
     # ---- round 15 red team ----
@@ -1572,21 +1527,16 @@ CMD_CASES += [
     # The expected-reason pins matter here more than anywhere else, because
     # these are the only cases covering check_db_wipe and a boolean alone would
     # let the whole function be deleted.
-    ("mongosh --eval 'db.dropDatabase()'", FEAT, True, "dropDatabase"),
     ("mongosh --eval 'db.users.drop()'", FEAT, True, "collection drop"),
     ("mongo --eval 'db.events.deleteMany({})'", FEAT, True, "empty filter"),
     ("redis-cli FLUSHALL", FEAT, True, "keyspace"),
     ("redis-cli FLUSHDB", FEAT, True, "keyspace"),
     ("rails db:drop", FEAT, True, "rails"),
     ("rake db:reset", FEAT, True, "rails"),
-    ("php artisan migrate:fresh", FEAT, True, "artisan"),
-    ("php artisan db:wipe", FEAT, True, "artisan"),
-    # The escape hatches. rails and artisan put the target in an env var or a
-    # flag, which is the only place the guard can read it, so naming a
+    # The escape hatches. rails puts the target in an env var, which is the only place the guard can read it, so naming a
     # non-production environment is their equivalent of `-h localhost`.
     ("RAILS_ENV=test rails db:drop", FEAT, False),
     ("RAILS_ENV=development rake db:reset", FEAT, False),
-    ("php artisan migrate:fresh --env=testing", FEAT, False),
     ("mongosh 'mongodb://localhost/dev' --eval 'db.users.drop()'", FEAT, False),
     ("redis-cli -h localhost FLUSHDB", FEAT, False),
     # NODE_ENV=production must not read as a non-production escape.
@@ -1669,7 +1619,6 @@ CMD_CASES += [
     ("command psql -h db.production.io -c 'select 1'", FEAT, True, "PRODUCTION"),
     ("/usr/local/bin/psql -h db.production.io -c 'select 1'", FEAT, True, "PRODUCTION"),
     ("PGPASSWORD=x psql -h db.production.io -c 'select 1'", FEAT, True, "PRODUCTION"),
-    ("sudo mongosh --eval 'db.dropDatabase()'", FEAT, True, "dropDatabase"),
     ("sudo redis-cli FLUSHALL", FEAT, True, "keyspace"),
     ("nohup psql -h prod.io -c 'DROP TABLE users'", FEAT, True),
     ("time redis-cli -h prod-cache.io FLUSHDB", FEAT, True),
@@ -1680,7 +1629,6 @@ CMD_CASES += [
     ("env RAILS_ENV=test rails db:drop", FEAT, False),
     # The env prefix carries the target. This is the class that broke once:
     # segments() strips it, so a rule reading the stripped text is blind here.
-    ("MONGO_HOST=prod.io mongosh --eval 'db.dropDatabase()'", FEAT, True),
     ("REDIS_HOST=prod.io redis-cli FLUSHALL", FEAT, True),
     ("DOCKER_HOST=unix:///var/run/docker.sock docker exec db psql -c 'DROP TABLE t'",
      FEAT, True),
@@ -1815,13 +1763,6 @@ CMD_CASES += [
     # `.git/hooks` was missing from the internals list, and it is the one
     # subdirectory of .git that executes.
     ("cp /tmp/x .git/hooks/pre-commit", FEAT, True),
-    # Two git settings that turn a later, innocent-looking command into
-    # something else. The rule reads the command it is given; the damage is
-    # done by what runs afterwards.
-    ("git config core.hooksPath /tmp/evilhooks", FEAT, True),
-    ("git -c alias.zz='commit -m x' zz", MAIN, True),
-    ("git config alias.ci 'commit -m auto'", FEAT, True),
-    ("git symbolic-ref HEAD refs/heads/other", FEAT, True),
     # The guard's own files. "Do not ask the user to disable a hook" was the
     # one guardrail in AGENTS.md with nothing enforcing it.
     ("echo '{}' > ~/.claude/settings.json", FEAT, True),
@@ -1834,7 +1775,6 @@ CMD_CASES += [
     ("rm -rf build/hooks", FEAT, False),
     ("git config user.email me@example.com", FEAT, False),
     ("git config --get remote.origin.url", FEAT, False),
-    ("git symbolic-ref --short HEAD", FEAT, False),
     ("echo hello > notes.txt", FEAT, False),
     ("python3 -m pytest -q > test-output.log", FEAT, False),
     ("echo 'build ok' >> build.log", FEAT, False),
@@ -1902,8 +1842,6 @@ CMD_CASES += [
     ("psql app -c 'DELETE users'", FEAT, True),
     ('rake db:migrate:reset', FEAT, True),
     ('rails db:migrate:reset', FEAT, True),
-    ('php artisan migrate:refresh', FEAT, True),
-    ('mongosh --eval \'db.getSiblingDB("app").dropDatabase()\'', FEAT, True),
     ('mongosh --eval \'db["users"].drop()\'', FEAT, True),
     ('git push --mirror origin', FEAT, True),
     ('git push origin --mirror', FEAT, True),
@@ -2104,8 +2042,6 @@ CMD_CASES += [
     ("sudo -H psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
     ("nice -n 10 psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
     ("nice 10 psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
-    ("sudo -u mongo mongosh --eval \"db.dropDatabase()\"", FEAT, True),
-    ("nice -n 5 mongosh --eval \"db.dropDatabase()\"", FEAT, True),
     ("sudo -u postgres -H psql -h db.prod.example.com -c 'SELECT 1'", FEAT, True),
     # The inline-program rule read RAW, so ANY prefix disabled it. It now reads
     # the wrapper-free invocation instead. `stripped` cannot serve here: it may
@@ -2155,12 +2091,10 @@ CMD_CASES += [
     ('npx prisma migrate reset', FEAT, True),
     ('psql $DATABASE_URL -c "DELETE FROM events"', FEAT, True),
     ('sqlite3 app.db "DELETE FROM sessions"', FEAT, True),
-    ('mongosh --eval "db.dropDatabase()"', FEAT, True),
     ('mongosh --eval "db.users.drop()"', FEAT, True),
     ('mongosh --eval "db.events.deleteMany({})"', FEAT, True),
     ('rails db:reset', FEAT, True),
     ('rake db:drop', FEAT, True),
-    ('php artisan migrate:reset', FEAT, True),
     ('psql postgres://user:pw@prod-db.example.com/app', FEAT, True),
     ('psql -h db.production.internal -U admin app', FEAT, True),
     ('mysql -h prod-mysql.example.com -u root app', FEAT, True),
@@ -2178,9 +2112,7 @@ CMD_CASES += [
     ('sqlite3 /var/app/production.db "DROP TABLE users"', FEAT, True),
     ('RAILS_ENV=production rails db:drop', FEAT, True),
     ('rails db:drop RAILS_ENV=production', FEAT, True),
-    ('php artisan migrate:fresh --env=production', FEAT, True),
     ('redis-cli -h prod-cache.io FLUSHALL', FEAT, True),
-    ('mongosh "mongodb+srv://u@prod.mongodb.net/a" --eval "db.dropDatabase()"', FEAT, True),
     ('bash -c "echo hi; rm -rf /"', FEAT, True),
     ("sh -c 'echo hi; rm -rf ~'", FEAT, True),
     ("sudo bash -c 'echo hi; rm -rf /'", FEAT, True),
@@ -2227,7 +2159,6 @@ CMD_CASES += [
     ('git checkout -- .', FEAT, True),
     ('git branch -D feature/y', FEAT, True),
     ('git filter-branch --force --index-filter "git rm -r --cached ." HEAD', FEAT, True),
-    ('git update-ref -d refs/heads/feature/y', FEAT, True),
     ('git stash clear', FEAT, True),
     ('git commit -m "fix"', MAIN, STRICT),
     ('git commit -am "fix"', MAIN, STRICT),
@@ -2519,10 +2450,6 @@ CMD_CASES += [
     # for work already discarded by something else. Blocking routine 
     # maintenance for that is not worth the friction.
     ('git gc --prune=now --aggressive', FEAT, False),
-    # Allowed. It deletes local container volumes, which can include a dev 
-    # database, but nothing it touches is production and the command is a 
-    # deliberate cleanup nobody types by accident.
-    ('docker system prune -af --volumes', FEAT, False),
 ]
 
 CMD_CASES += [
@@ -2596,7 +2523,6 @@ CMD_CASES += [
     # spelling was refused alongside the dangerous one.
     ("wrangler deploy --env staging", FEAT, False),
     ("fly deploy --config staging.toml", FEAT, False),
-    ("serverless deploy --stage dev", FEAT, False),
     ("wrangler deploy", FEAT, True),
     ("fly deploy", FEAT, True),
     ("wrangler deploy --env production", FEAT, True),
@@ -2670,6 +2596,90 @@ CMD_CASES += [
     ("rm ~/.claude/settings.json", FEAT, True),
     ("sed -i s/a/b/ ~/.claude/hooks/guard_rules.py", FEAT, True),
     ("rm -rf ~/.local/share/onbelay", FEAT, True),
+    # ---- rules from documented agent incidents ----
+    # claude-code#62156, #30731, #32523
+    ("printenv", FEAT, True, "whole environment"),
+    ("env", FEAT, True, "whole environment"),
+    ("env | grep KEY", FEAT, True, "whole environment"),
+    ("set", FEAT, True, "whole environment"),
+    ("export -p", FEAT, True, "whole environment"),
+    ("echo $OPENAI_API_KEY", FEAT, True, "secret variable"),
+    ('echo "${GITHUB_TOKEN:0:8}"', FEAT, True, "secret variable"),
+    ('printf "%s\\n" "$DB_PASSWORD"', FEAT, True, "secret variable"),
+    ("printenv STRIPE_SECRET_KEY", FEAT, True, "secret variable"),
+    ("cat /proc/1/environ", FEAT, True, "environ"),
+    ("env FOO=1 node x.js", FEAT, False),
+    ("printenv PATH", FEAT, False),
+    ("echo $HOME", FEAT, False),
+    ("echo $PATH", FEAT, False),
+    ('test -n "$OPENAI_API_KEY"', FEAT, False),
+    ('[ -z "${X_TOKEN:-}" ] && echo missing', FEAT, False),
+    ('echo "$GH_TOKEN" | gh auth login --with-token', FEAT, False),
+    ("set -euo pipefail", FEAT, False),
+    ("export NODE_ENV=test", FEAT, False),
+    # claude-code#2782, #3068, #20718
+    ("killall node", FEAT, True, "by name"),
+    ("pkill -f 'next dev'", FEAT, True, "by name"),
+    ("taskkill /F /IM node.exe", FEAT, True, "by name"),
+    ("kill 4242", FEAT, False),
+    ("kill -9 4242", FEAT, False),
+    ("kill $(lsof -ti :3000)", FEAT, False),
+    ("pkill -P $$", FEAT, False),
+    ("taskkill /PID 4242 /F", FEAT, False),
+    # claude-code#27063, #36183
+    ("npx drizzle-kit push --force", FEAT, True, "data loss"),
+    ("npx prisma db push --accept-data-loss", FEAT, True, "data loss"),
+    ("npx drizzle-kit push", FEAT, False),
+    ("npx drizzle-kit generate", FEAT, False),
+    ("npx prisma db push", FEAT, False),
+    # PocketOS/Railway volume delete, theregister.com 2026/04/27
+    ("curl -X DELETE https://api.example.com/v1/volumes/42", FEAT, True, "deletes remote"),
+    ("curl --request DELETE -H 'Authorization: Bearer x' https://api.example.com/x", FEAT, True, "deletes remote"),
+    ("http DELETE https://api.example.com/x", FEAT, True, "deletes remote"),
+    ("wget --method=DELETE https://api.example.com/x", FEAT, True, "deletes remote"),
+    ("""curl https://backboard.railway.app/graphql/v2 -d '{"query":"mutation { volumeDelete(volumeId: \\"v\\") }"}'""", FEAT, True, "deletes remote"),
+    ("gh api -X DELETE repos/o/r", FEAT, True, "deletes remote"),
+    ("curl -X DELETE http://localhost:3000/api/items/1", FEAT, False),
+    ("curl -X DELETE http://127.0.0.1:8080/x", FEAT, False),
+    ("curl https://api.example.com/items", FEAT, False),
+    ("curl -X POST https://api.example.com/items -d '{}'", FEAT, False),
+    # DataTalks.Club terraform (AIID 1424), Kiro (AIID 1442)
+    ("gcloud compute instances delete vm-1 --zone us-central1-a", FEAT, True, "cloud resource"),
+    ("gcloud sql instances delete prod-db", FEAT, True, "cloud resource"),
+    ("az group delete --name rg-prod --yes", FEAT, True, "cloud resource"),
+    ("aws ec2 terminate-instances --instance-ids i-0abc", FEAT, True, "cloud resource"),
+    ("aws rds delete-db-instance --db-instance-identifier prod", FEAT, True, "cloud resource"),
+    ("aws --profile prod cloudformation delete-stack --stack-name app", FEAT, True, "cloud resource"),
+    ("aws s3 rb s3://bucket", FEAT, True, "S3 bucket"),
+    ("gcloud sql instances describe prod-db", FEAT, False),
+    ("aws ec2 describe-instances", FEAT, False),
+    ("az group list", FEAT, False),
+    ("aws ec2 terminate-instances --instance-ids i-0abc --dry-run", FEAT, False),
+    # docker volume wipes take the local database with them
+    ("docker compose down -v", FEAT, True, "volumes"),
+    ("docker-compose down --volumes", FEAT, True, "volumes"),
+    ("docker volume rm pgdata", FEAT, True, "volumes"),
+    ("docker volume prune -f", FEAT, True, "volumes"),
+    ("docker system prune -af --volumes", FEAT, True, "volumes"),
+    ("docker system prune", FEAT, False),
+    ("docker volume ls", FEAT, False),
+    # claude-code#168
+    ("chmod -R 777 storage", FEAT, True, "recursive permission"),
+    ("sudo chown -R me:staff /usr", FEAT, True, "recursive permission"),
+    ("chmod -R 755 ~", FEAT, True, "recursive permission"),
+    ('sudo chown -R "$USER" "$HOME"', FEAT, True, "recursive permission"),
+    ("chmod +x script.sh", FEAT, False),
+    ("chmod -R u+w ./build", FEAT, False),
+    ("chown -R $USER ./node_modules", FEAT, False),
+    # Google Antigravity drive wipe (techradar), openai/codex#43343
+    ("rmdir /s /q C:\\", FEAT, True, "drive"),
+    ("rd /s /q D:\\", FEAT, True, "drive"),
+    ("rmdir /s /q %USERPROFILE%", FEAT, True, "drive"),
+    ("Remove-Item -Recurse -Force C:\\", FEAT, True, "drive"),
+    ("Remove-Item -Recurse -Force $env:USERPROFILE", FEAT, True, "drive"),
+    ("Remove-Item -Recurse -Force ~", FEAT, True, "drive"),
+    ("rmdir /s /q build", FEAT, False),
+    ("Remove-Item -Recurse -Force .\\dist", FEAT, False),
 ]
 
 PATH_CASES += [

@@ -1,55 +1,56 @@
 # agent-config
 
-Guardrails for Claude Code and Codex. A hook that stops force pushes, secret reads, and destructive commands before they run, and tells the agent what to do instead.
+Coding agents are great until one runs `docker compose down -v` on your dev database. Or force-pushes over your repo. Or `rm -rf ~/`. All of that actually happened to people.
+
+This is a hook that stops that stuff before it runs. Everything else goes through.
 
 ```bash
 npx @sid-thephysicskid/agent-config@latest install
 ```
 
-Restart your agent. Codex asks you to approve the new hooks in `/hooks`. macOS or Linux, Node 20+, Python 3.9+.
+Claude Code and Codex. macOS or Linux, Node 20+, Python 3.9+. No network, no model calls, no dependencies.
 
-<p align="center">
-  <img src="docs/assets/how-it-works.svg" width="900" alt="Three ordinary commands run. A force push is stopped, and the message names the safe alternative.">
-</p>
+## What it stops
 
-## What it blocks
+Every rule is here because an agent did it to someone:
 
-- Force pushes to `main`, `master`, `trunk`, `release`, `production`, `prod`, and deleting those branches
-- `reset --hard`, `clean -f`, and discarding the working tree
-- `rm -rf` on home, system, or `.git` directories
-- Reading or copying `.env` files, SSH keys, and cloud credentials
-- `DROP`, `TRUNCATE`, `DELETE` or `UPDATE` without `WHERE`, and connections to production database hosts
-- Publishes and production deploys that skip CI
-- Edits that remove the guard itself
+- `rm -rf` on your home dir or `.git` ([cc#12637](https://github.com/anthropics/claude-code/issues/12637), [codex#3728](https://github.com/openai/codex/issues/3728))
+- Force push over your repo ([cc#33402](https://github.com/anthropics/claude-code/issues/33402))
+- `reset --hard`, `clean -f`, `git restore .` eating uncommitted work ([Cursor](https://forum.cursor.com/t/cursor-agent-just-delete-my-changes-by-git-restore-in-sandbox/154810))
+- Wiping databases: `prisma db push --force-reset`, `drizzle-kit push --force`, `docker compose down -v` ([cc#36183](https://github.com/anthropics/claude-code/issues/36183), [cc#27063](https://github.com/anthropics/claude-code/issues/27063), [cc#63644](https://github.com/anthropics/claude-code/issues/63644))
+- `terraform destroy`, cloud CLI deletes, `curl -X DELETE` at your provider ([DataTalks.Club](https://incidentdatabase.ai/cite/1424/), [PocketOS](https://www.theregister.com/2026/04/27/cursoropus_agent_snuffs_out_pocketos/))
+- Reading or printing keys: `.env`, `~/.aws/credentials`, `printenv`, `echo $API_KEY` ([cc#9637](https://github.com/anthropics/claude-code/issues/9637), [cc#62156](https://github.com/anthropics/claude-code/issues/62156))
+- `killall node` taking out your IDE ([cc#2782](https://github.com/anthropics/claude-code/issues/2782))
+- `chmod -R` / `chown -R` on system dirs ([cc#168](https://github.com/anthropics/claude-code/issues/168))
 
-Everything else goes through, including commits and pushes to `main` and edits to your own settings and `CLAUDE.md`. No network, no model call, about 50ms per check. Full list: [docs/guard-coverage.md](docs/guard-coverage.md).
+Full list: [docs/guard-coverage.md](docs/guard-coverage.md).
 
-## Options
+## Pasted a key into the chat?
 
-Set in your shell profile.
+It spots common key formats (GitHub, OpenAI, Anthropic, AWS, Stripe, and more) and stops the agent from acting on the message. Rotate the key anyway: Claude Code still writes the message to its local log.
 
-| Variable | Effect |
-|---|---|
-| `AGENT_CONFIG_PROTECTED_BRANCHES` | Comma-separated list replacing the default protected branches. Empty turns branch rules off. |
-| `AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1` | Also refuse plain commits, merges, and pushes on protected branches. |
-
-## Commands
+Next time, don't paste it:
 
 ```bash
-npx @sid-thephysicskid/agent-config@latest doctor      # prove the guard still blocks
-npx @sid-thephysicskid/agent-config@latest uninstall   # remove it, settings restored
+npx @sid-thephysicskid/agent-config secret OPENAI_API_KEY        # hidden input, into .env
+npx @sid-thephysicskid/agent-config secret NPM_TOKEN --github    # into GitHub Actions secrets
 ```
 
-## Limits
+## What it won't get in the way of
 
-It is a safety net, not a security boundary. It stops a careless agent, not a determined one; known gaps are listed with reasons in [evals/redteam-candidates.txt](evals/redteam-candidates.txt). It fails open: if a rule crashes, your agent keeps working and `doctor` reports it. Keep branch protection, backups, and least-privilege credentials.
+Commits and pushes to `main`. Editing your settings or `CLAUDE.md`. `kill <pid>`. `docker compose down`. Normal work.
 
-## Blocked something safe?
+If it blocks something normal, that's a bug. [Open an issue](https://github.com/sid-thephysicskid/agent-config/issues/new?template=refused-ordinary-work.yml).
 
-[Open an issue](https://github.com/sid-thephysicskid/agent-config/issues/new?template=refused-ordinary-work.yml) with the exact command. False positives are bugs.
+Don't want direct commits to `main` either? `export AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1`.
 
-## Upgrading from On Belay
+## The honest bit
 
-This package was briefly published as `@sid-thephysicskid/onbelay`. Running `install` removes the old hooks, skills, and instruction block. Workflow skills were dropped in 0.5.0; [mattpocock/skills](https://github.com/mattpocock/skills) covers that ground.
+It's a seatbelt, not a vault. An agent that really wants to can get around it; known gaps are in [evals/redteam-candidates.txt](evals/redteam-candidates.txt). If a rule crashes, it fails open and your agent keeps working.
 
-MIT. [SECURITY.md](SECURITY.md) for bypass reports, [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
+```bash
+npx @sid-thephysicskid/agent-config@latest doctor      # check it still blocks
+npx @sid-thephysicskid/agent-config@latest uninstall   # gone, settings restored
+```
+
+Used to be `onbelay`. `install` cleans that up. MIT.
