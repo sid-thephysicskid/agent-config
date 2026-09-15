@@ -189,6 +189,32 @@ class CodexHooksTest(unittest.TestCase):
         with open(self.path) as f:
             self.assertEqual(f.read(), before)
 
+    def test_replaces_a_0_4_onbelay_hook(self):
+        onbelay = {"description": "PreToolUse guardrails from onbelay", "hooks": {"PreToolUse": [{
+            "matcher": ".*", "hooks": [{"type": "command", "command": H._command(
+                "/old/onbelay/0.4.2", "guard-codex.py").replace("agent-config-hook-v1", "onbelay-hook-v1")}]}]}}
+        with open(self.path, "w") as f:
+            json.dump(onbelay, f)
+        H.merge(self.path, "/new/agent-config")
+        self.assertNotIn("onbelay", json.dumps(self.read()))
+        self.assertTrue(H.check(self.path, "/new/agent-config"))
+        self.assertEqual(len(self.commands("PreToolUse")), 1)
+
+    def test_strip_restores_the_backup_bytes_and_skips_files_without_ours(self):
+        original = '{"description":"mine","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"python3 ~/mine/audit.py"}]}]}}'
+        with open(self.path, "w") as f:
+            f.write(original)
+        H.strip(self.path)
+        with open(self.path) as f:
+            self.assertEqual(f.read(), original)
+        with open(self.path + H.BACKUP_SUFFIX, "w") as f:
+            f.write(original)
+        H.merge(self.path, "/opt/agent-config")
+        H.strip(self.path)
+        with open(self.path) as f:
+            self.assertEqual(f.read(), original)
+        self.assertFalse(os.path.exists(self.path + H.BACKUP_SUFFIX))
+
     def test_updates_a_symlink_target_without_detaching_it(self):
         target = self.path + ".target"
         os.rename(self.path, target)
