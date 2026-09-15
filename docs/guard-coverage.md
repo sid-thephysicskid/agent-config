@@ -88,8 +88,8 @@ A careless agent, not an adversary. The guard reads one tool call at a time, imm
 
 | Measure | Count |
 |---|---|
-| Commands refused | 812 |
-| Ordinary commands allowed | 899 |
-| Path cases | 49 |
+| Commands refused | 814 |
+| Ordinary commands allowed | 900 |
+| Path cases | 52 |
 | Red-team candidates leaking untriaged | 0, or CI fails |
 <!-- END GENERATED -->

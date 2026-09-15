@@ -19,7 +19,7 @@ const payload = [
   "install.sh",
   "uninstall.sh",
   "scripts/install_settings.py",
-  "scripts/install_codex_hooks.py",
+  "scripts/install_hooks_json.py",
   "scripts/migrate-legacy.sh",
 ];
 const installRoot = join(homedir(), ".local", "share", "agent-config");
@@ -196,7 +196,7 @@ const [command = "--help", ...args] = process.argv.slice(2);
 try {
   if (process.platform === "win32") fail("Windows is not supported. Use macOS, Linux, or WSL");
   if (command === "--help" || command === "-h" || command === "help") {
-    process.stdout.write(`agent-config ${version}\n\nUsage:\n`
+    process.stdout.write(`agent-config ${version}\nGuardrails for Claude Code, Codex, and Cursor.\n\nUsage:\n`
       + "  agent-config install     install or repair the guard\n"
       + "  agent-config doctor      check the guard is wired and deciding\n"
       + "  agent-config uninstall   remove it\n"
@@ -207,6 +207,8 @@ try {
     process.stdout.write(`${version}\n`);
   } else if (Object.hasOwn(commands, command)) {
     await commands[command](args);
+  } else if (command === "init") {
+    fail("init was removed with the skills in 0.5.0. The guardrails install with: agent-config install");
   } else {
     fail(`unknown command: ${command}`);
   }

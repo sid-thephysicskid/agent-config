@@ -33,6 +33,7 @@ class NpxCliTest(unittest.TestCase):
             help_text = self.run_cli(home, "--help").stdout
             for command in ("install", "doctor", "uninstall", "secret"):
                 self.assertIn("agent-config " + command, help_text)
+            self.assertIn("Cursor", help_text)
             self.assertNotIn("--extras", help_text)
             self.assertEqual(self.run_cli(home, "--version").stdout.strip(), VERSION)
 
@@ -64,16 +65,18 @@ class NpxCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             for args in (("install", "--extras"), ("install", "--dry-run"), ("init",)):
                 self.assertNotEqual(self.run_cli(home, *args, check=False).returncode, 0, args)
+            self.assertIn("agent-config install", self.run_cli(home, "init", check=False).stderr)
             self.assertFalse(os.path.exists(os.path.join(home, ".local")))
 
     def test_pack_contains_the_payload_and_nothing_private(self):
         result = subprocess.run(["npm", "pack", "--dry-run", "--json", "--ignore-scripts"],
                                 cwd=ROOT, text=True, capture_output=True, check=True)
         files = {entry["path"] for entry in packed(result.stdout)["files"]}
-        for path in ("bin/agent-config.js", "hooks/guard-bash.py", "hooks/guard-prompt.py", "install.sh",
-                     "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
-                     "scripts/install_codex_hooks.py", "scripts/migrate-legacy.sh"):
+        for path in ("bin/agent-config.js", "hooks/guard-bash.py", "hooks/guard-cursor.py", "hooks/guard-prompt.py",
+                     "install.sh", "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
+                     "scripts/install_hooks_json.py", "scripts/migrate-legacy.sh"):
             self.assertIn(path, files)
+        self.assertNotIn("scripts/install_codex_hooks.py", files)
         for prefix in ("tests/", "docs/"):
             self.assertFalse(any(p.startswith(prefix) for p in files), prefix)
         hooks = {os.path.basename(p) for p in files if p.startswith("hooks/")}

@@ -27,11 +27,13 @@ if [[ -e "$C/settings.json" ]]; then
     && ok "removed the guard from $C/settings.json" \
     || warn "left $C/settings.json alone"
 fi
-if [[ -e "$X/hooks.json" ]]; then
-  python3 "$REPO/scripts/install_codex_hooks.py" strip "$X/hooks.json" \
-    && ok "removed the guard from $X/hooks.json" \
-    || warn "left $X/hooks.json alone"
-fi
+for f in "$X/hooks.json" "$HOME/.cursor/hooks.json"; do
+  if [[ -e "$f" ]]; then
+    python3 "$REPO/scripts/install_hooks_json.py" strip "$f" \
+      && ok "removed the guard from $f" \
+      || warn "left $f alone"
+  fi
+done
 
 for l in "$C"/hooks/guard*.py; do
   if [[ -L "$l" && "$(readlink "$l")" == */hooks/"${l##*/}" ]]; then rm -f "$l"; fi
@@ -40,7 +42,7 @@ rm -f "$C"/hooks/__pycache__/guard*.pyc
 rmdir "$C/hooks/__pycache__" "$C/hooks" 2>/dev/null || true
 ok "removed the guard links from $C/hooks"
 
-for f in "$C/settings.json" "$X/hooks.json"; do
+for f in "$C/settings.json" "$X/hooks.json" "$HOME/.cursor/hooks.json"; do
   b="$f.before-agent-config"
   [[ -e "$b" ]] || continue
   if cmp -s "$f" "$b"; then rm -f "$b"; else warn "kept $b: $f changed after install, so it was not restored"; fi

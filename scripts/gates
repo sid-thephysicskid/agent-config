@@ -31,7 +31,7 @@ GATES=(
   "red team|no|python3 tests/redteam.py tests/redteam-candidates.txt"
   "coverage doc|no|python3 scripts/guard-coverage --check"
   "settings merge|no|python3 tests/test_install_settings.py"
-  "codex hooks|no|python3 tests/test_install_codex_hooks.py"
+  "hooks.json merge|no|python3 tests/test_install_hooks_json.py"
   "install helpers|no|python3 tests/test_install_helpers.py"
   "prompt guard|no|python3 tests/test_prompt_guard.py"
   "release metadata|no|python3 tests/test_release_metadata.py"

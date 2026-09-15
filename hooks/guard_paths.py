@@ -6,7 +6,7 @@ from guard_parse import normalize_path, strip_quoted, tokens
 from guard_secrets import READ_SAFE_SECRET, _is_secret_path
 
 MIDDLE_SIGNALS = (
-    r"\.(claude|codex)/(hooks|settings\.json|settings\.local\.json|hooks\.json)",
+    r"\.(claude|codex|cursor)/(hooks|settings\.json|settings\.local\.json|hooks\.json)",
     r"\.git/(config|hooks|HEAD|refs)",
     r"\.local/share/agent-config",
 )
@@ -15,11 +15,11 @@ _GIT_CONTROL = re.compile(
     r"(^|/)\.git/(config|COMMIT_EDITMSG|HEAD|refs(?:/|$)|hooks(?:/|$))")
 
 # Matched on SHAPE, anywhere. Instruction files (CLAUDE.md, AGENTS.md) are prose and never protected.
-GUARD_OWN_FILES = re.compile(r"(^|/)\.(claude|codex)/hooks(?:/|$)")
+GUARD_OWN_FILES = re.compile(r"(^|/)\.(claude|codex|cursor)/hooks(?:/|$)")
 # Settings files that wire the guard in: editable, as long as the guard's own hook entries survive.
 GUARD_CONFIG = re.compile(
-    r"(^|/)\.(claude|codex)/(settings\.json|settings\.local\.json|hooks\.json)$")
-GUARD_HOOK = re.compile(r"guard-(?:bash|files|codex|prompt)\.py|(?:agent-config|onbelay)-hook-v1")
+    r"(^|/)\.(claude|codex|cursor)/(settings\.json|settings\.local\.json|hooks\.json)$")
+GUARD_HOOK = re.compile(r"guard-(?:bash|files|codex|cursor|prompt)\.py|(?:agent-config|onbelay)-hook-v1")
 
 PAYLOAD_ROOT = "~/.local/share/agent-config"
 
@@ -133,5 +133,5 @@ def check_control_path(p, shown=None, change=None):
                 "and tell the human rather than editing the installed copy")
     if kind == "config" and _drops_guard_hooks(p, change):
         return (f"write to '{shown}' that could remove the guard's own hook entries.",
-                "use Edit on the setting you mean and leave the guard's hook entries in place")
+                "change only the setting you mean and keep the guard's hook entries")
     return None

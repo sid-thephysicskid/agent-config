@@ -56,7 +56,39 @@ def field(payload, *keys):
         return node
     return "" if node is None else str(node)
 
-ANALYSIS_BUDGET = float(os.environ.get("GUARD_ANALYSIS_BUDGET", "3.0"))
+READ_TOOLS = {"read", "view", "viewfile", "readfile", "readtextfile",
+              "readmediafile", "readmultiplefiles", "notebookread"}
+WRITE_TOOLS = {"edit", "editfile", "write", "writefile", "multiedit",
+               "notebookedit", "update", "strreplace", "createfile",
+               "movefile", "renamefile", "delete", "deletefile", "removefile",
+               "applypatch", "notebookeditcell"}
+PATH_KEYS = ("file_path", "notebook_path", "path", "filePath", "target_file",
+             "filename", "file", "paths", "source", "destination", "source_path",
+             "destination_path", "old_path", "new_path")
+
+def file_access(payload, tool):
+    """(paths, writing) for a file tool, or None for any other tool."""
+    name = tool.strip().lower()
+    action = name.rsplit("__", 1)[-1] if name.startswith("mcp__") else name
+    action = action.replace("_", "").replace("-", "")
+    if action not in READ_TOOLS | WRITE_TOOLS:
+        return None
+    paths = []
+    for key in PATH_KEYS:
+        got = field(payload, "tool_input", key) or field(payload, key)
+        if isinstance(got, list):
+            paths.extend(str(x) for x in got if x)
+        elif got:
+            paths.append(got)
+    return paths, action in WRITE_TOOLS
+
+def defer_to_cursor(payload):
+    # Cursor can run Claude Code hooks too; there the ~/.cursor/hooks.json entry decides.
+    if "cursor_version" in payload:
+        print('{"permission": "allow"}')
+        sys.exit(0)
+
+ANALYSIS_BUDGET =float(os.environ.get("GUARD_ANALYSIS_BUDGET", "3.0"))
 
 class _OutOfTime(Exception):
     pass

@@ -19,15 +19,37 @@ import subprocess
 import sys
 import tempfile
 
+from fixtures import FEAT, MAIN
+
 H = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hooks")
 BASH = os.path.join(H, "guard-bash.py")
 FILES = os.path.join(H, "guard-files.py")
 CODEX = os.path.join(H, "guard-codex.py")
+CURSOR = os.path.join(H, "guard-cursor.py")
+PROMPT = os.path.join(H, "guard-prompt.py")
 TEST_HOME = tempfile.TemporaryDirectory()
 LOG = os.path.join(TEST_HOME.name, ".claude", "guard-failopen.log")
 
 BAD = "rm -rf /"
 SECRET = "/app/.env"
+ALLOW = '{"permission": "allow"}'
+DENY = '"permission": "deny"'
+CURSOR_HOOKS = os.path.join(TEST_HOME.name, ".cursor", "hooks.json")
+os.makedirs(os.path.dirname(CURSOR_HOOKS))
+with open(CURSOR_HOOKS, "w") as fh:
+    fh.write('{"version": 1, "hooks": {"beforeReadFile": [{"command": "python3 guard-cursor.py"}]}}')
+TOKEN = "gh" + "p_" + "Ab3xQ9" * 6
+LEASE = "git push --force-with-lease=feature/x:0123456789abcdef0123456789abcdef01234567"
+
+
+def tool(name, **tool_input):
+    """A preToolUse payload shaped like the Cursor CLI's."""
+    return {"hook_event_name": "preToolUse", "cursor_version": "2026.09.10", "tool_name": name,
+            "tool_input": tool_input, "cwd": "", "workspace_roots": ["/app"]}
+
+
+def shell(command, root="/app"):
+    return dict(tool("Shell", command=command, cwd="", timeout=30000), workspace_roots=[root])
 
 
 def run(adapter, payload, raw=None):
@@ -38,7 +60,7 @@ def run(adapter, payload, raw=None):
         data = data.encode("utf-8", "surrogateescape")
     p = subprocess.run(["python3", adapter], input=data, capture_output=True,
                        env=dict(os.environ, HOME=TEST_HOME.name))
-    return p.returncode, p.stderr.decode("utf-8", "replace")
+    return p.returncode, p.stderr.decode("utf-8", "replace"), p.stdout.decode("utf-8", "replace")
 
 
 def deep_raw(n):
@@ -52,7 +74,7 @@ def deep_raw(n):
 
 
 CASES = [
-    # (label, adapter, payload, raw, expected exit)
+    # (label, adapter, payload, raw, expected exit or (exit, text on stdout))
     ("argv-form command blocks", BASH, {"tool_name": "Bash",
                                         "tool_input": {"command": ["rm", "-rf", "/"]}}, None, 2),
     ("codex shell tool blocks", CODEX, {"tool_name": "shell",
@@ -178,6 +200,37 @@ CASES = [
     ("codex MCP move checks destination", CODEX,
      {"tool_name": "mcp__filesystem__move_file",
       "tool_input": {"source": "/app/src/a.py", "destination": SECRET}}, None, 2),
+
+    ("cursor: force push denied with the fix", CURSOR, shell("git push --force origin main"), None, (2, "Do this instead")),
+    ("cursor: git status allowed", CURSOR, shell("git status"), None, (0, ALLOW)),
+    ("cursor: empty cwd uses workspace_roots on a protected branch", CURSOR, shell(LEASE, MAIN), None, (2, DENY)),
+    ("cursor: empty cwd uses workspace_roots on a feature branch", CURSOR, shell(LEASE, FEAT), None, (0, ALLOW)),
+    ("cursor: .env read denied", CURSOR, tool("Read", file_path=SECRET), None, (2, DENY)),
+    ("cursor: source read allowed", CURSOR, tool("Read", file_path="/app/src/a.py"), None, (0, ALLOW)),
+    ("cursor: Write dropping the guard from hooks.json denied", CURSOR,
+     tool("Write", file_path=CURSOR_HOOKS, content='{"version": 1}'), None, (2, DENY)),
+    ("cursor: Write keeping the guard in hooks.json allowed", CURSOR,
+     tool("Write", file_path=CURSOR_HOOKS, content="python3 guard-cursor.py"), None, (0, ALLOW)),
+    ("cursor: ordinary Write allowed", CURSOR, tool("Write", file_path="/app/src/a.py", content="x"), None, (0, ALLOW)),
+    ("cursor: Delete of hooks.json denied", CURSOR, tool("Delete", file_path=CURSOR_HOOKS), None, (2, DENY)),
+    ("cursor: Delete of a guard file denied", CURSOR,
+     tool("Delete", file_path="/home/me/.claude/hooks/guard-bash.py"), None, (2, DENY)),
+    ("cursor: MCP secret read denied", CURSOR, tool("MCP:read_file", path=SECRET), None, (2, DENY)),
+    ("cursor: MCP params as JSON text", CURSOR,
+     dict(tool("MCP:read_file"), tool_input=json.dumps({"path": SECRET})), None, (2, DENY)),
+    ("cursor: MCP params that are not JSON allow", CURSOR,
+     dict(tool("MCP:read_file"), tool_input="{oops"), None, (0, ALLOW)),
+    ("cursor: other tools allowed", CURSOR, tool("Grep", pattern="x"), None, (0, ALLOW)),
+    ("cursor: not JSON allows", CURSOR, None, "not json", (0, ALLOW)),
+    ("cursor: empty stdin allows", CURSOR, None, "", (0, ALLOW)),
+    ("cursor: pasted key refused", PROMPT,
+     {"hook_event_name": "beforeSubmitPrompt", "prompt": "key " + TOKEN}, None, (2, '"continue": false')),
+    ("cursor: ordinary prompt allowed", PROMPT,
+     {"hook_event_name": "beforeSubmitPrompt", "prompt": "hello"}, None, (0, '{"continue": true}')),
+    ("cursor payload through the Claude shell hook defers", BASH,
+     {"cursor_version": "1.7", "tool_name": "Shell", "tool_input": {"command": BAD}}, None, (0, ALLOW)),
+    ("cursor payload through the Claude file hook defers", FILES,
+     {"cursor_version": "1.7", "tool_name": "Read", "tool_input": {"file_path": SECRET}}, None, (0, ALLOW)),
 ]
 
 # The host kills a hook at 5s and reads the kill as "allowed", so the slowest
@@ -207,13 +260,14 @@ for label, adapter, payload, want in SLOW_CASES:
         bad.append((label, want, p.returncode,
                     p.stderr.decode("utf-8", "replace").strip().splitlines()[:1]))
 for label, adapter, payload, raw, want in CASES:
-    rc, err = run(adapter, payload, raw)
+    rc, err, out = run(adapter, payload, raw)
+    want, text = want if isinstance(want, tuple) else (want, "")
     if rc not in (0, 2):
         # The contract, above everything else: block or allow, never crash.
         # An exit code outside {0, 2} is read by the host as "not blocked",
         # which is fail-open by accident rather than by design.
         bad.append((label, want, rc, ["exit code outside the contract {0, 2}"]))
-    elif want is not None and rc != want:
+    elif (want is not None and rc != want) or text not in out:
         bad.append((label, want, rc, err.strip().splitlines()[:1]))
 
 # Repair the permissions of an existing log too. Passing 0600 to O_CREAT only
