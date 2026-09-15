@@ -1417,8 +1417,8 @@ CMD_CASES += [
     ("git cherry-pick abc1234", FEAT, False),
     # `rm -rf /*`: the glob strip leaves an empty base, and that clause was the
     # only thing catching it.
-    ("rm -rf /*", FEAT, True, "current directory"),
-    ("rm -rf /", FEAT, True),
+    ("rm -rf /*", FEAT, True, "filesystem root"),
+    ("rm -rf /", FEAT, True, "filesystem root"),
     # PUBLIC_CERT: split so each half is pinned on its own.
     ("cat certs/ca.pem", FEAT, False),                 # basename list only
     ("cat /etc/ssl/private-key.pem", FEAT, False),     # path prefix only

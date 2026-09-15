@@ -122,6 +122,9 @@ def _glob_means_everything(comp):
     return bare in ("", ".")
 
 def _rm_target_verdict(t):
+    if re.fullmatch(r"/+", t.strip("'\"")):
+        return ("rm -rf on the filesystem root.",
+                "name the specific directory you mean, with its full path")
     if _is_whole_tree(t) or _is_dot_walk(t):
         return ("rm -rf on the whole current directory (or its parent).",
                 "name the specific subdirectory you mean, with its path")
@@ -133,7 +136,8 @@ def _rm_target_verdict(t):
             base = re.sub(r"/[^/]*[*?\[][^/]*/?$", "", p)
     base = normalize_path(base) if base != p else p
     if base in ("", "."):
-        return ("rm -rf on the whole current directory (or the filesystem root).",
+        where = "the filesystem root" if p.startswith("/") else "the whole current directory"
+        return (f"rm -rf on {where}.",
                 "name the specific subdirectory you mean, with its path")
     if _under_system_root(base):
         return (f"rm -rf on '{t}', a home or system directory.",
