@@ -28,6 +28,15 @@ CMD_CASES = [
     ('cat ~/.config/gcloud/application_default_credentials.json', MAIN, True),
     ('cat config/secrets.env', MAIN, True),
     ('cp config/production.env /tmp/x', MAIN, True),
+    # Sourcing loads the file without printing it; writing or reading it still refuses.
+    ('source .env', MAIN, False),
+    ('. .env', MAIN, False),
+    ('set -a; source .env; set +a', MAIN, False),
+    ('set -a && . ./.env.local && set +a && npm run dev', MAIN, False),
+    ('source ~/.ssh/id_rsa', MAIN, True),
+    ('source .env; echo $API_KEY', MAIN, True),
+    ('echo "X=y" >> .env', MAIN, True),
+    ('echo X=y | tee -a .env', MAIN, True),
     # The template and ordinary files must stay readable.
     ('cat README.md', MAIN, False),
     ('cat ~/.gitconfig', MAIN, False),
