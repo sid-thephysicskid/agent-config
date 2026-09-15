@@ -2,7 +2,20 @@
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - Unreleased
+## [0.5.1] - 2026-09-15
+
+### Fixed
+
+- Removing the prompt guard's hook entry from `settings.json` or `hooks.json` is refused, like the other guard hooks.
+- The prompt guard no longer refuses AWS documentation example keys, one-character placeholders like `ghp_xxxx`, or a bare PEM header with no key body.
+- The prompt guard no longer refuses Google `AIza` keys, which Firebase web configs publish on purpose.
+- `source .env` is allowed. Writing to `.env` from the shell now suggests `agent-config secret NAME`.
+- `rm -rf /` says it targets the filesystem root.
+- `CLAUDE_CONFIG_DIR` is honoured by the hooks deny rule and the fail-open log.
+- `agent-config secret` refuses a missing `--env` directory, a bare `--env`, and a multiline value for `.env`, and writes nothing.
+- `uninstall` no longer warns about deny rules you already had, or about a backup of a file that did not change.
+
+## [0.5.0] - 2026-09-15
 
 Back to the name `agent-config`, and the guard only.
 

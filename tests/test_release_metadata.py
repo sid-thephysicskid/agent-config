@@ -2,6 +2,7 @@
 """Package metadata and the publish workflow agree."""
 import json
 import os
+import re
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +24,7 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertEqual(self.package["publishConfig"]["access"], "public")
 
     def test_changelog_has_current_version(self):
-        self.assertIn("## [%s]" % self.version, read("CHANGELOG.md"))
+        self.assertRegex(read("CHANGELOG.md"), r"(?m)^## \[%s\] - \d{4}-\d{2}-\d{2}$" % re.escape(self.version))
 
     def test_packaged_paths_exist(self):
         for entry in self.package["files"]:
