@@ -54,14 +54,13 @@ class CodexHooksTest(unittest.TestCase):
         H.strip(self.path)
         self.assertEqual(self.read(), self.original)
 
-    def test_installs_only_the_pre_tool_guard(self):
+    def test_installs_only_the_pre_tool_and_prompt_guards(self):
         H.merge(self.path, "/opt/agent-config")
         cfg = self.read()
-        commands = [hook["command"]
-                    for group in cfg["hooks"].get("PreToolUse", [])
-                    for hook in group["hooks"]]
-        self.assertTrue(any("guard-codex.py" in c
-                            for c in commands))
+        self.assertTrue(any("guard-codex.py" in c for c in self.commands("PreToolUse")))
+        self.assertEqual(len(self.commands("UserPromptSubmit")), 1)
+        self.assertIn("guard-prompt.py", self.commands("UserPromptSubmit")[0])
+        self.assertNotIn("matcher", cfg["hooks"]["UserPromptSubmit"][0])
         self.assertNotIn("Stop", cfg["hooks"])
         self.assertNotIn("SessionStart", cfg["hooks"])
 

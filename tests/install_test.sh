@@ -23,8 +23,9 @@ USER_CODEX='{"description":"mine","hooks":{"Stop":[{"hooks":[{"type":"command","
 echo "== fresh install wires both hosts and proves the guard decides"
 home fresh
 chk "install exits 0" "$(install)" 0
-chk "two Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 2
+chk "three Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 3
 chk "one Codex hook" "$(grep -c 'guard-codex.py' "$H/.codex/hooks.json")" 1
+chk "one Codex prompt hook" "$(grep -c 'guard-prompt.py' "$H/.codex/hooks.json")" 1
 chk "guard linked" "$(readlink "$H/.claude/hooks/guard-bash.py")" "$S/repo/hooks/guard-bash.py"
 chk "tests are not linked" "$(yes_no test -e "$H/.claude/hooks/tests.py")" no
 chk "no instruction files" "$(yes_no test -e "$H/.claude/CLAUDE.md" -o -e "$H/.codex/AGENTS.md")" no
@@ -36,6 +37,8 @@ cmd="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"][
 run_hook() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"/"}' "$1" | HOME="$H" sh -c "$cmd" >/dev/null 2>&1; echo $?; }
 chk "rm -rf / blocked" "$(run_hook 'rm -rf /')" 2
 chk "ls allowed" "$(run_hook 'ls')" 0
+pcmd="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"])' "$H/.claude/settings.json")"
+chk "pasted token refused" "$(printf '{"prompt":"gh%s_%036d"}' p 0 | HOME="$H" sh -c "$pcmd" >/dev/null 2>&1; echo $?)" 2
 mv "$H/.claude/hooks" "$H/hooks.off"
 chk "missing hooks allow" "$(run_hook 'rm -rf /')" 0
 mv "$H/hooks.off" "$H/.claude/hooks"
@@ -46,6 +49,10 @@ ln -sfn "$S/stub.py" "$H/.claude/hooks/guard-bash.py"
 chk "check fails" "$(install --check)" 1
 chk "every refusal probe reported" "$(grep -c 'did not refuse' "$S/out")" 4
 chk "reinstall repairs" "$(install)" 0
+ln -sfn "$S/stub.py" "$H/.claude/hooks/guard-prompt.py"
+chk "check fails on a prompt guard that allows keys" "$(install --check)" 1
+chk "prompt probe reported" "$(grep -c 'prompt guard did not' "$S/out")" 1
+chk "reinstall repairs the prompt guard" "$(install)" 0
 rm "$H/.codex/hooks.json"
 chk "missing Codex hooks.json is caught" "$(install --check)" 1
 
@@ -57,7 +64,7 @@ cp "$H/.claude/settings.json" "$S/settings.orig"; cp "$H/.codex/hooks.json" "$S/
 mkdir -p "$H/.claude/hooks"; echo 'import sys' > "$H/.claude/hooks/my-guard.py"
 for _ in 1 2 3; do chk "install exits 0" "$(install)" 0; done
 chk "user hook kept" "$(grep -c 'mine/wrap.py' "$H/.claude/settings.json")" 1
-chk "no duplicate hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 2
+chk "no duplicate hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 3
 chk "model kept" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model"])' "$H/.claude/settings.json")" opus
 chk "codex hook kept" "$(grep -c 'mine/stop.py' "$H/.codex/hooks.json")" 1
 chk "uninstall exits 0" "$(uninstall)" 0
@@ -96,7 +103,7 @@ echo "== CLAUDE_CONFIG_DIR and CODEX_HOME are respected"
 home custom; mkdir -p "$S/cc" "$S/cx"
 export CLAUDE_CONFIG_DIR="$S/cc" CODEX_HOME="$S/cx"
 chk "install exits 0" "$(install)" 0
-chk "Claude settings in custom dir" "$(grep -c 'agent-config-hook-v1' "$S/cc/settings.json")" 2
+chk "Claude settings in custom dir" "$(grep -c 'agent-config-hook-v1' "$S/cc/settings.json")" 3
 chk "Codex hooks in custom dir" "$(grep -c 'guard-codex.py' "$S/cx/hooks.json")" 1
 chk "default dirs untouched" "$(ls -A "$H/.claude" "$H/.codex" | tr '\n' ' ')" "$H/.claude:  $H/.codex: "
 chk "check exits 0" "$(install --check)" 0
@@ -109,7 +116,7 @@ home dots; mkdir -p "$H/dots"; printf '{"model":"opus"}' > "$H/dots/settings.jso
 ln -s "$H/dots/settings.json" "$H/.claude/settings.json"
 chk "install exits 0" "$(install)" 0
 chk "still a link" "$(readlink "$H/.claude/settings.json")" "$H/dots/settings.json"
-chk "target wired" "$(grep -c 'agent-config-hook-v1' "$H/dots/settings.json")" 2
+chk "target wired" "$(grep -c 'agent-config-hook-v1' "$H/dots/settings.json")" 3
 chk "uninstall exits 0" "$(uninstall)" 0
 chk "link kept" "$(readlink "$H/.claude/settings.json")" "$H/dots/settings.json"
 chk "target restored" "$(cat "$H/dots/settings.json")" '{"model":"opus"}'
@@ -167,7 +174,7 @@ else
     chk "old release wired skills" "$(yes_no test -L "$H/.claude/skills/ship")" yes
     chk "install exits 0" "$(install)" 0
     clean_after_legacy "$H/.local/share/$name/$v"
-    chk "two new Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 2
+    chk "three new Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.json")" 3
     chk "one Codex hook" "$(grep -c 'guard-codex.py' "$H/.codex/hooks.json")" 1
     chk "check exits 0" "$(install --check)" 0
     chk "uninstall exits 0" "$(uninstall)" 0

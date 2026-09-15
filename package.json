@@ -17,24 +17,17 @@
     "agent-config": "bin/agent-config.js"
   },
   "files": [
-    "AGENTS.md",
-    "CHANGELOG.md",
     "LICENSE",
     "README.md",
-    "SECURITY.md",
     "VERSION",
     "bin/",
-    "docs/",
     "hooks/",
+    "!hooks/[!g]*",
     "install.sh",
     "scripts/install_codex_hooks.py",
     "scripts/migrate-legacy.sh",
     "scripts/install_settings.py",
-    "uninstall.sh",
-    "!**/__pycache__/**",
-    "!**/*.pyc",
-    "!**/*.pyo",
-    "!**/*.pyd"
+    "uninstall.sh"
   ],
   "engines": {
     "node": ">=20"

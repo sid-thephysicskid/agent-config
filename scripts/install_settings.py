@@ -34,6 +34,7 @@ DENY = (
 WIRING = (
     ("PreToolUse", "Bash", "guard-bash.py", 5),
     ("PreToolUse", "Read|Edit|Write|MultiEdit|NotebookEdit|mcp__.*__(read.*|view.*|write.*|edit.*|move.*|rename.*|delete.*|remove.*|create.*|apply.*)", "guard-files.py", 5),
+    ("UserPromptSubmit", None, "guard-prompt.py", 5),
 )
 
 _COMMAND_TAG = "agent-config-hook-v1"
@@ -166,7 +167,7 @@ def merge(path, hook_dir):
         entries = cfg.setdefault("hooks", {}).setdefault(event, [])
         entry = next((e for e in entries if e.get("matcher") == matcher), None)
         if entry is None:
-            entry = {"matcher": matcher, "hooks": []}
+            entry = {"hooks": []} if matcher is None else {"matcher": matcher, "hooks": []}
             entries.append(entry)
         entry["hooks"].append(
             {"type": "command", "command": _cmd(script, hook_dir), "timeout": timeout})

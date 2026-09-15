@@ -31,7 +31,7 @@ class NpxCliTest(unittest.TestCase):
     def test_help_and_version(self):
         with tempfile.TemporaryDirectory() as home:
             help_text = self.run_cli(home, "--help").stdout
-            for command in ("install", "doctor", "uninstall"):
+            for command in ("install", "doctor", "uninstall", "secret"):
                 self.assertIn("agent-config " + command, help_text)
             self.assertNotIn("--extras", help_text)
             self.assertEqual(self.run_cli(home, "--version").stdout.strip(), VERSION)
@@ -42,6 +42,7 @@ class NpxCliTest(unittest.TestCase):
             self.run_cli(home, "install", "guard")  # the 0.4 spelling still works
             hook = os.path.join(home, ".claude", "hooks", "guard-bash.py")
             self.assertTrue(os.readlink(hook).startswith(stable(home) + os.sep))
+            self.assertFalse(os.path.exists(os.path.join(stable(home), "hooks", "tests.py")))
             self.assertIn("All good", self.run_cli(home, "doctor").stdout)
             os.remove(hook)
             broken = self.run_cli(home, "doctor", check=False)
@@ -70,12 +71,16 @@ class NpxCliTest(unittest.TestCase):
         result = subprocess.run(["npm", "pack", "--dry-run", "--json", "--ignore-scripts"],
                                 cwd=ROOT, text=True, capture_output=True, check=True)
         files = {entry["path"] for entry in packed(result.stdout)["files"]}
-        for path in ("bin/agent-config.js", "hooks/guard-bash.py", "install.sh", "uninstall.sh", "LICENSE",
-                     "scripts/install_settings.py", "scripts/install_codex_hooks.py", "scripts/migrate-legacy.sh"):
+        for path in ("bin/agent-config.js", "hooks/guard-bash.py", "hooks/guard-prompt.py", "install.sh",
+                     "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
+                     "scripts/install_codex_hooks.py", "scripts/migrate-legacy.sh"):
             self.assertIn(path, files)
-        for prefix in ("tests/", "evals/", "skills/", "templates/"):
+        for prefix in ("tests/", "evals/", "skills/", "templates/", "docs/"):
             self.assertFalse(any(p.startswith(prefix) for p in files), prefix)
-        self.assertFalse(any("__pycache__" in p or p.endswith(".pyc") for p in files))
+        hooks = {os.path.basename(p) for p in files if p.startswith("hooks/")}
+        self.assertEqual(hooks, {n for n in os.listdir(os.path.join(ROOT, "hooks"))
+                                 if n.startswith("guard") and n.endswith(".py")})
+        self.assertFalse(files & {"CHANGELOG.md", "AGENTS.md", "SECURITY.md"})
 
     def test_packed_tarball_round_trips_through_npx(self):
         with tempfile.TemporaryDirectory() as directory:

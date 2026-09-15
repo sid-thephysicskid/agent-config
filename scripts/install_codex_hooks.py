@@ -23,7 +23,10 @@ LEGACY_DESCRIPTIONS = {
     "Lifecycle hooks shared with Claude Code via agent-config/hooks",
 }
 LEGACY_SCRIPTS = {"guard-codex.py", "check-docs.py", "welcome.py"}
-WIRING = (("PreToolUse", ".*", "guard-codex.py", 5, "Checking guardrails..."),)
+WIRING = (
+    ("PreToolUse", ".*", "guard-codex.py", 5, "Checking guardrails..."),
+    ("UserPromptSubmit", None, "guard-prompt.py", 5, "Checking the prompt for keys..."),
+)
 BACKUP_SUFFIX = ".before-agent-config"
 _COMMAND_TAG = "agent-config-hook-v1"
 # onbelay-hook-v1 is the 0.4.x spelling of the same marker.
@@ -129,8 +132,10 @@ def merge(path, repo):
     for event, matcher, script, timeout, status in WIRING:
         handler = {"type": "command", "command": _command(repo, script),
                    "timeout": timeout, "statusMessage": status}
-        cfg.setdefault("hooks", {}).setdefault(event, []).append(
-            {"hooks": [handler], "matcher": matcher})
+        group = {"hooks": [handler]}
+        if matcher is not None:
+            group["matcher"] = matcher
+        cfg.setdefault("hooks", {}).setdefault(event, []).append(group)
     if cfg.get("description") in LEGACY_DESCRIPTIONS or not existed:
         cfg["description"] = DESCRIPTION
     _save(cfg, path)

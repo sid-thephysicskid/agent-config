@@ -101,6 +101,12 @@ else
   bad "$C/hooks/guard-bash.py is missing"
 fi
 (( PROBLEMS > before )) || ok "the guard refuses destructive commands and allows git status"
+before=$PROBLEMS
+for want in 2:"gh%s_%036d" 0:hello; do
+  [[ "$(printf "{\"prompt\":\"${want#*:}\"}" p 0 | PYTHONDONTWRITEBYTECODE=1 python3 "$C/hooks/guard-prompt.py" >/dev/null 2>&1; echo $?)" == "${want%%:*}" ]] \
+    || bad "the prompt guard did not return ${want%%:*} for a ${want#*:} prompt"
+done
+(( PROBLEMS > before )) || ok "the prompt guard refuses a pasted token and allows hello"
 
 if [[ -n "${AGENT_CONFIG_PROTECTED_BRANCHES+set}" ]]; then
   warn "AGENT_CONFIG_PROTECTED_BRANCHES is set: protected branches are '$AGENT_CONFIG_PROTECTED_BRANCHES'"

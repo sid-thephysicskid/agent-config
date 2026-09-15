@@ -99,6 +99,18 @@ class MergeTest(Base):
         for tool in ("mcp__filesystem__read_file", "mcp__files__move_file"):
             self.assertRegex(tool, "^(?:%s)$" % matcher)
 
+    def test_prompt_hook_has_no_matcher_and_strips_out_of_a_users_entry(self):
+        S.merge(self.path, HOOKS)
+        self.assertNotIn("matcher", self.read()["hooks"]["UserPromptSubmit"][0])
+        original = {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "mine.sh"}]}]}}
+        self.write(original)
+        S.merge(self.path, HOOKS)
+        S.merge(self.path, HOOKS)
+        self.assertEqual(len(self.read()["hooks"]["UserPromptSubmit"]), 1)
+        self.assertTrue(S.check(self.path, HOOKS))
+        S.strip(self.path)
+        self.assertEqual(self.read(), original)
+
     def test_check_rejects_a_hook_that_only_mentions_our_script(self):
         self.write({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
             {"type": "command", "command": "# TODO wire guard-bash.py"}]}]}})
