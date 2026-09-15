@@ -151,8 +151,13 @@ CASES = [
      None, 2),
     ("codex patch: block a guard mutation", CODEX,
      {"tool_name": "apply_patch", "tool_input":
-      "*** Begin Patch\n*** Update File: /home/me/.codex/hooks.json\n@@\n-a\n+b\n*** End Patch"},
+      "*** Begin Patch\n*** Update File: /home/me/.codex/hooks.json\n@@\n"
+      "-  \"command\": \"python3 ~/.codex/hooks/guard-codex.py\"\n*** End Patch"},
      None, 2),
+    ("codex patch: an unrelated hooks.json edit is allowed", CODEX,
+     {"tool_name": "apply_patch", "tool_input":
+      "*** Begin Patch\n*** Update File: /home/me/.codex/hooks.json\n@@\n-a\n+b\n*** End Patch"},
+     None, 0),
     ("codex patch: inspect move destinations", CODEX,
      {"tool_name": "apply_patch", "tool_input":
       "*** Begin Patch\n*** Update File: /app/src/a.py\n*** Move to: /app/.env\n*** End Patch"},

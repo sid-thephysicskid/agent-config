@@ -1,49 +1,33 @@
 {
-  "name": "@sid-thephysicskid/onbelay",
-  "version": "0.4.2",
-  "description": "Guardrails for coding agents, plus the workflow skills to keep them pointed at the right problem.",
+  "name": "@sid-thephysicskid/agent-config",
+  "version": "0.5.0",
+  "description": "Guardrails for Claude Code and Codex: hooks that stop force pushes, secret leaks, and destructive commands before they run.",
   "license": "MIT",
   "author": "Sid Abhinav",
-  "homepage": "https://github.com/sid-thephysicskid/onbelay#readme",
+  "homepage": "https://github.com/sid-thephysicskid/agent-config#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sid-thephysicskid/onbelay.git"
+    "url": "git+https://github.com/sid-thephysicskid/agent-config.git"
   },
   "bugs": {
-    "url": "https://github.com/sid-thephysicskid/onbelay/issues"
+    "url": "https://github.com/sid-thephysicskid/agent-config/issues"
   },
   "type": "module",
   "bin": {
-    "onbelay": "bin/onbelay.js"
+    "agent-config": "bin/agent-config.js"
   },
   "files": [
-    "AGENTS.md",
-    "CHANGELOG.md",
     "LICENSE",
     "README.md",
-    "SECURITY.md",
-    "THIRD-PARTY-NOTICES.md",
     "VERSION",
     "bin/",
-    "docs/",
     "hooks/",
+    "!hooks/[!g]*",
     "install.sh",
-    "operator-profiles/",
-    "operator-skills/",
-    "output-styles/",
-    "scripts/agent-init",
     "scripts/install_codex_hooks.py",
     "scripts/migrate-legacy.sh",
     "scripts/install_settings.py",
-    "scripts/manage_conflicts.py",
-    "scripts/manage_instructions.py",
-    "skills/",
-    "templates/",
-    "uninstall.sh",
-    "!**/__pycache__/**",
-    "!**/*.pyc",
-    "!**/*.pyo",
-    "!**/*.pyd"
+    "uninstall.sh"
   ],
   "engines": {
     "node": ">=20"
@@ -57,11 +41,11 @@
     "prepack": "python3 tests/test_release_metadata.py && python3 tests/test_npx_cli.py"
   },
   "keywords": [
-    "agents",
-    "guardrails",
     "claude-code",
     "codex",
-    "skills",
+    "hooks",
+    "guardrails",
+    "agents",
     "developer-tools"
   ]
 }

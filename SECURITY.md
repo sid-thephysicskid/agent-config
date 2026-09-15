@@ -1,29 +1,16 @@
 # Security policy
 
-## What this is
-
-The guard hooks in `hooks/` are a safety net against agent mistakes, not a
-security boundary. Internal errors fail **open**. Analysis timeouts also fail
-open unless a cheap scan finds a destructive command shape, in which case the
-tool call is refused. Read [docs/guard-coverage.md](docs/guard-coverage.md) before reporting
-anything.
+The guard is a safety net against agent mistakes, not a security boundary. Internal errors and analysis timeouts fail open.
 
 ## Worth reporting
 
-- **A bypass.** A command [docs/guard-coverage.md](docs/guard-coverage.md) says is refused, and is not. Read the accepted gaps in `evals/redteam-candidates.txt` first; many shapes are already recorded as out of scope, each with a reason. The interesting shape is a rule that fires on the plain spelling and misses a sibling one: a quoted refspec, a wrapper word, an environment prefix, a padded command.
-- **A guard that fails open on a shape it should handle.** A crash, a hang, or a parse it gives up on, where the rule itself clearly covers the case.
+- A command [docs/guard-coverage.md](docs/guard-coverage.md) says is refused, but is allowed. Check [evals/redteam-candidates.txt](evals/redteam-candidates.txt) first; listed gaps are deliberate.
+- A crash or hang on a shape a rule clearly covers.
 
-## Not a vulnerability
-
-That a determined human, or an agent that wants to, can work around the guard. That is the stated design, not a defect. The rules are readable and published, and none of it is meant to hold against someone trying. Do not grant permissions you would not grant without these hooks.
+A person or agent deliberately working around the guard is not a vulnerability.
 
 ## How to report
 
-Use GitHub's private vulnerability reporting: the **Security** tab, then **Report a vulnerability**. Please do not open a public issue for a bypass, because a working bypass is a usable recipe until it is fixed.
+Use GitHub private vulnerability reporting: **Security**, then **Report a vulnerability**. Include the exact command, the working directory, and what you expected. Do not open a public issue for a working bypass.
 
-Include the exact command string, the working directory it ran from, and what you expected to happen.
-
-## Supported versions
-
-Security fixes are supported on the latest tagged release. If no release is
-tagged, audit and pin a commit rather than depending on a moving branch.
+Fixes ship in the latest release only.

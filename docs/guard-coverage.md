@@ -52,8 +52,7 @@ argument. Read them before reporting a bypass.
 
 ### Git
 
-- defining a git alias (an alias runs a different command than the one written)
-- deleting a ref directly
+- deleting a protected branch
 - dropping stashed work
 - force-removing a worktree with live changes
 - git branch -D (force-deletes an unmerged branch)
@@ -63,22 +62,20 @@ argument. Read them before reporting a bypass.
 - git push --mirror (force-updates every ref and deletes remote branches)
 - git reset --hard (discards committed and staged work)
 - history rewrite
-- moving a protected branch ref directly
-- reflog expiry (destroys the recovery net)
-- repointing HEAD by hand (the next commit lands on a branch you did not check out)
-- repointing git's hooks directory (every later git command runs code from there)
 
 ### Filesystem and tooling
 
-- a DELETE against the GitHub API
-- dd writing to a raw device node
+- a recursive permission change on a system or home root, or to 777
+- an API call that deletes remote resources
+- deleting Docker volumes (the local database lives there)
 - deleting a GitHub repository
 - deleting a Kubernetes resource
+- deleting a cloud resource
+- deleting a whole drive or home directory
 - dropdb
+- killing processes by name (takes down every match, the agent included)
 - merging a PR with --admin (bypasses required checks)
-- mkfs (formats a filesystem, destroying its contents)
 - publishing to a package registry (irreversible)
-- publishing to crates.io (irreversible: a version can never be reused)
 - publishing to the npm registry (irreversible)
 - publishing to the npm registry via yarn (irreversible)
 - recursive S3 deletion
@@ -91,21 +88,15 @@ argument. Read them before reporting a bypass.
 
 - a Cloudflare Workers deploy (production by default)
 - a Fly.io deploy (production by default)
-- a Modal deploy (production by default)
 - a Netlify production deploy
 - a Railway deploy (production by default)
-- a Serverless deploy (production by default)
 - a Vercel production deploy
-- an Elastic Beanstalk deploy (production by default)
 - applying migrations to a live database
-- publishing new Lambda code straight to the live function
 
 ### Database destruction
 
 - MongoDB collection drop
 - MongoDB delete with an empty filter: removes every document
-- MongoDB dropDatabase: destroys the entire database
-- artisan migrate:fresh/db:wipe: drops every table
 - rails db:drop/db:reset: drops the database
 - redis FLUSHALL/FLUSHDB: wipes the entire keyspace
 
@@ -113,8 +104,8 @@ argument. Read them before reporting a bypass.
 
 | Measure | Count |
 |---|---|
-| Commands refused | 904 |
-| Ordinary commands allowed | 752 |
-| Path cases | 32 |
+| Commands refused | 808 |
+| Ordinary commands allowed | 896 |
+| Path cases | 45 |
 | Red-team candidates leaking untriaged | 0, or CI fails |
 <!-- END GENERATED -->

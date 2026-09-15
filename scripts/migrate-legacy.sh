@@ -1,67 +1,115 @@
 #!/usr/bin/env bash
-# Rename pre-0.4.0 (`agent-config`) install state to its current spelling.
-#
-# The rename to On Belay changed every marker install uses to recognize its own
-# work. Nothing about their meaning changed, only the name, so renaming them
-# here means the rest of the installer sees an ordinary install. Teaching each
-# call site a second spelling instead would put "is this ours" in seven places
-# permanently.
-#
-# Symlinks and the payload root are deliberately NOT touched: migrating the
-# origins file is enough, because that is what ownership is decided from, and
-# the normal relink path then adopts every link on its own.
-#
-# Usage: migrate-legacy.sh <claude root> <codex root> [check]
-# `check` is 1 to report without writing, matching install.sh's own CHECK.
-# Prints one line per change. Silent, exit 0, on a machine that never ran 0.3.x.
+# Remove what 0.3.x (agent-config) and 0.4.x (onbelay) installs left behind, and superseded payloads.
+# Usage: migrate-legacy.sh <claude root> <codex root> <payload to keep>
+# Prints one line per change. Hook entries in settings.json and hooks.json are handled by the merge/strip helpers.
 set -uo pipefail
-C="${1:?claude root required}"; X="${2:?codex root required}"; CHECK="${3:-0}"
+C="$1" X="$2" KEEP="${3%/}"
+SHARE="$HOME/.local/share"
 
-# The origins file is a list of paths, so both lists have to survive; a
-# duplicate line is harmless because the reader stops at the first match. The
-# two backups are whole files, and if the current name already exists the
-# legacy one is a leftover from a half-finished upgrade, not a second source.
-move() {  # move <legacy> <current> <append|discard>
+roots=()
+for f in "$C/.onbelay-origins" "$C/.agent-config-origins"; do
+  [[ -f "$f" ]] || continue
+  while IFS= read -r o || [[ -n "$o" ]]; do
+    [[ -n "$o" ]] && roots+=("${o%/}")
+  done < "$f"
+done
+for d in "$SHARE"/onbelay/*/ "$SHARE"/agent-config/*/; do
+  [[ -f "$d/VERSION" ]] && roots+=("${d%/}")
+done
+
+# Only link shapes old installs created, so a dotfiles tree listed as an origin is not claimed.
+old_link() {
+  local t="${1%/}" r
+  for r in ${roots[@]+"${roots[@]}"}; do
+    [[ "$r" == "$KEEP" ]] && continue
+    case "$t" in
+      "$r"/skills/*|"$r"/operator-skills/*|"$r"/hooks/*|"$r"/output-styles/*|\
+      "$r"/templates/AGENTS.global.md|"$r"/scripts/agent-init|"$r"/AGENTS.md|"$r"/how-to-use.html)
+        return 0 ;;
+    esac
+  done
+  return 1
+}
+
+n=0
+for l in "$C"/skills/* "$X"/skills/* "$C"/output-styles/* "$C"/hooks/* \
+         "$C/CLAUDE.md" "$X/AGENTS.md" "$HOME/AGENTS.md" "$C/how-to-use.html" \
+         "$HOME/.local/bin/agent-init"; do
+  if [[ -L "$l" ]] && old_link "$(readlink "$l")"; then
+    rm -f "$l" && n=$((n+1))
+  fi
+done
+if (( n )); then echo "removed $n links left by an earlier install"; fi
+if (( ${#roots[@]} )); then rmdir "$C/output-styles" "$C/skills" "$X/skills" 2>/dev/null; fi
+
+# The managed instruction block, byte for byte as the old merge appended it.
+for f in "$C/CLAUDE.md" "$X/AGENTS.md"; do
+  [[ -f "$f" ]] && grep -qE '<!-- (onbelay|agent-config):start -->' "$f" || continue
+  python3 - "$f" <<'PY' && echo "removed the old instruction block from $f"
+import os, re, sys
+link = sys.argv[1]
+path = os.path.realpath(link)
+with open(path, newline="") as fh:
+    text = re.sub(r"<!-- (onbelay|agent-config):start -->.*?<!-- \1:end -->", "", fh.read(), flags=re.S)
+if not text and not os.path.islink(link) and not any(
+        os.path.exists(link + ".before-" + n) for n in ("onbelay", "agent-config")):
+    os.unlink(path)
+else:
+    with open(path, "w", newline="") as fh:
+        fh.write(text)
+PY
+  for b in "$f.before-onbelay" "$f.before-agent-config"; do
+    if [[ -f "$b" ]] && cmp -s "$f" "$b"; then rm -f "$b"; fi
+  done
+done
+
+# Skills an old install moved aside, now that our links no longer occupy their paths.
+for f in "$SHARE/onbelay/conflicts.json" "$SHARE/agent-config/conflicts.json"; do
+  [[ -f "$f" ]] || continue
+  python3 - "$f" <<'PY' && echo "restored skills moved aside by an earlier install"
+import json, os, shutil, sys
+state = sys.argv[1]
+with open(state) as fh:
+    entries = json.load(fh)
+left = []
+for e in entries:
+    if not os.path.lexists(e["backup"]):
+        continue
+    if os.path.lexists(e["path"]):
+        left.append(e)
+        continue
+    os.makedirs(os.path.dirname(e["path"]), exist_ok=True)
+    os.rename(e["backup"], e["path"])
+if left:
+    with open(state, "w") as fh:
+        json.dump(left, fh, indent=2)
+else:
+    os.unlink(state)
+    shutil.rmtree(state + ".d", ignore_errors=True)
+PY
+done
+
+# Old names of state the current helpers own.
+rename() {
   [[ -e "$1" ]] || return 0
-  if (( ! CHECK )); then
-    if [[ -e "$2" ]]; then
-      [[ "$3" == append ]] && cat "$1" >> "$2"
-      rm -f "$1"
-    else
-      mv "$1" "$2"
-    fi
-  fi
-  echo "moved $(basename "$1")"
+  if [[ -e "$2" ]]; then rm -f "$1"; else mv "$1" "$2"; fi
+  echo "renamed $(basename "$1")"
 }
+settings="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$C/settings.json")"
+rename "$C/settings.json.before-onbelay" "$C/settings.json.before-agent-config"
+rename "$settings.onbelay-deny.json" "$settings.agent-config-deny.json"
+rename "$X/hooks.json.before-onbelay" "$X/hooks.json.before-agent-config"
+rm -f "$C/.onbelay-origins" "$C/.agent-config-origins"
 
-# A literal swap of a marker that appears nowhere else, rather than a JSON
-# round-trip: it cannot reformat the rest of someone's config, and `cat >`
-# writes THROUGH a symlink a dotfile manager may have put here.
-retag() {  # retag <file>
-  local t
-  [[ -f "$1" ]] && grep -q 'agent-config-hook-v1\|guardrails from agent-config' "$1" || return 0
-  if (( ! CHECK )); then
-    t="$(mktemp)" || return 0
-    sed -e 's/: agent-config-hook-v1:/: onbelay-hook-v1:/g' \
-        -e 's/guardrails from agent-config/guardrails from onbelay/' "$1" > "$t" \
-      && cat "$t" > "$1"
-    rm -f "$t"
+for r in ${roots[@]+"${roots[@]}"}; do
+  [[ -d "$r" && "$r" != "$KEEP" ]] || continue
+  [[ "$r" == "$SHARE"/onbelay/* || "$r" == "$SHARE"/agent-config/* ]] || continue
+  # find exits 1 on a missing dir, which pipefail would read as "no links".
+  if { find "$C" "$X" "$HOME/.local/bin" -maxdepth 2 -type l -lname "$r/*" 2>/dev/null || true; } | grep -q .; then
+    echo "kept $r: something still links into it"
+  else
+    rm -rf "$r" && echo "removed payload $r"
   fi
-  echo "retagged the guard hooks in $(basename "$1")"
-}
-
-move "$C/.agent-config-origins" "$C/.onbelay-origins" append
-move "$C/settings.json.before-agent-config" "$C/settings.json.before-onbelay" discard
-move "$C/settings.json.agent-config-deny.json" "$C/settings.json.onbelay-deny.json" discard
-retag "$C/settings.json"
-retag "$X/hooks.json"
-
-# The record of skills backed up during a 0.3.x conflict. Without it an
-# uninstall cannot put them back.
-L="$HOME/.local/share/agent-config/conflicts.json"
-N="$HOME/.local/share/onbelay/conflicts.json"
-if [[ -f "$L" && ! -f "$N" ]]; then
-  (( CHECK )) || { mkdir -p "$(dirname "$N")" && mv "$L" "$N"; }
-  echo "moved the skill-conflict backup record"
-fi
+done
+rmdir "$SHARE/onbelay" "$SHARE/agent-config" 2>/dev/null
 exit 0

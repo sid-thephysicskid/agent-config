@@ -2,6 +2,33 @@
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - Unreleased
+
+Back to the name `agent-config`, and the guard only.
+
+### Removed
+
+- All workflow skills, operator skills, output styles, instruction routing, and `init`. They duplicated [mattpocock/skills](https://github.com/mattpocock/skills) and were rarely invoked. `install` now installs the guard and nothing else.
+
+### Added
+
+- Pasted keys: a prompt hook for Claude Code and Codex refuses a message containing a known key format and tells you to rotate it. Codex drops the message entirely. Claude Code still writes it to the local session log.
+- `agent-config secret NAME`: type a secret without echo; it goes to `.env` (mode 600) or `gh secret set`, never through the chat.
+
+### Changed
+
+- Package renamed from `@sid-thephysicskid/onbelay` to `@sid-thephysicskid/agent-config`. Environment variables are now `AGENT_CONFIG_*`.
+- Plain commits, merges, and pushes on `main` and other protected branches are allowed. Force pushes, history rewrites, and branch deletion there are still refused. Set `AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1` for the old behavior.
+- Editing `settings.json`, `CLAUDE.md`, or `AGENTS.md` is allowed. Only edits that remove the guard's own hooks are refused.
+
+### Fixed
+
+- `git -C $DIR commit` no longer fails as "an undeterminable branch" when `DIR` is set earlier in the same command.
+
+### Upgrading
+
+`install` removes 0.3.x and 0.4.x state: old hook entries, skill links, the instruction block, and old payloads.
+
 ## [0.4.2] - 2026-08-28
 
 ### Fixed

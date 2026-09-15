@@ -48,48 +48,47 @@ class CodexHooksTest(unittest.TestCase):
         ]
 
     def test_existing_hook_survives_merge_and_strip(self):
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         self.assertIn("python3 ~/mine/audit.py", self.commands("PreToolUse"))
 
         H.strip(self.path)
         self.assertEqual(self.read(), self.original)
 
-    def test_installs_only_the_pre_tool_guard(self):
-        H.merge(self.path, "/opt/onbelay")
+    def test_installs_only_the_pre_tool_and_prompt_guards(self):
+        H.merge(self.path, "/opt/agent-config")
         cfg = self.read()
-        commands = [hook["command"]
-                    for group in cfg["hooks"].get("PreToolUse", [])
-                    for hook in group["hooks"]]
-        self.assertTrue(any("guard-codex.py" in c
-                            for c in commands))
+        self.assertTrue(any("guard-codex.py" in c for c in self.commands("PreToolUse")))
+        self.assertEqual(len(self.commands("UserPromptSubmit")), 1)
+        self.assertIn("guard-prompt.py", self.commands("UserPromptSubmit")[0])
+        self.assertNotIn("matcher", cfg["hooks"]["UserPromptSubmit"][0])
         self.assertNotIn("Stop", cfg["hooks"])
         self.assertNotIn("SessionStart", cfg["hooks"])
 
     def test_merge_is_idempotent(self):
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         first = self.read()
         for _ in range(3):
-            H.merge(self.path, "/opt/onbelay")
+            H.merge(self.path, "/opt/agent-config")
         self.assertEqual(self.read(), first)
 
     def test_relocation_replaces_only_our_old_commands(self):
-        H.merge(self.path, "/old/onbelay")
-        H.merge(self.path, "/new/onbelay")
+        H.merge(self.path, "/old/agent-config")
+        H.merge(self.path, "/new/agent-config")
         rendered = json.dumps(self.read())
-        self.assertNotIn("/old/onbelay", rendered)
-        self.assertIn("/new/onbelay", rendered)
+        self.assertNotIn("/old/agent-config", rendered)
+        self.assertIn("/new/agent-config", rendered)
         self.assertIn("python3 ~/mine/audit.py", rendered)
 
     def test_upgrades_the_previous_exclusive_file_and_still_uninstalls_cleanly(self):
         legacy = {
-            "description": "Guardrails shared with Claude Code via onbelay/hooks",
+            "description": "Guardrails shared with Claude Code via agent-config/hooks",
             "hooks": {
                 "PreToolUse": [{
                     "matcher": ".*",
                     "hooks": [{
                         "type": "command",
                         "command": H._legacy_command(
-                            "/old/onbelay", "guard-codex.py"),
+                            "/old/agent-config", "guard-codex.py"),
                         "timeout": 5,
                         "statusMessage": "Checking guardrails...",
                     }],
@@ -98,7 +97,7 @@ class CodexHooksTest(unittest.TestCase):
         }
         with open(self.path, "w") as f:
             json.dump(legacy, f)
-        H.merge(self.path, "/new/onbelay")
+        H.merge(self.path, "/new/agent-config")
         self.assertEqual(self.read()["description"], H.DESCRIPTION)
         H.strip(self.path)
         self.assertFalse(os.path.exists(self.path))
@@ -111,36 +110,36 @@ class CodexHooksTest(unittest.TestCase):
         })
         with open(self.path, "w") as f:
             json.dump(self.original, f)
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         H.strip(self.path)
         self.assertIn(theirs, self.commands("PreToolUse"))
 
     def test_an_unrelated_hook_with_the_same_script_name_is_not_removed(self):
-        theirs = H._legacy_command("/opt/not-onbelay", "welcome.py")
+        theirs = H._legacy_command("/opt/not-agent-config", "welcome.py")
         self.original["hooks"]["SessionStart"] = [{
             "hooks": [{
                 "type": "command",
                 "command": theirs,
                 "timeout": 5,
-                "statusMessage": "Loading onbelay...",
+                "statusMessage": "Loading agent-config...",
             }],
         }]
         with open(self.path, "w") as f:
             json.dump(self.original, f)
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         H.strip(self.path)
         self.assertIn(theirs, self.commands("SessionStart"))
 
     def test_new_file_is_removed_on_strip(self):
         os.unlink(self.path)
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         self.assertTrue(os.path.exists(self.path))
         H.strip(self.path)
         self.assertFalse(os.path.exists(self.path))
 
     def test_owned_description_is_removed_when_user_keys_remain(self):
         os.unlink(self.path)
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         cfg = self.read()
         cfg["theme"] = "mine"
         with open(self.path, "w") as f:
@@ -150,7 +149,7 @@ class CodexHooksTest(unittest.TestCase):
 
     def test_merge_preserves_existing_file_mode(self):
         os.chmod(self.path, 0o600)
-        H.merge(self.path, "/opt/onbelay")
+        H.merge(self.path, "/opt/agent-config")
         self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
 
     def test_command_quotes_an_apostrophe_in_the_repo_path(self):
@@ -158,24 +157,24 @@ class CodexHooksTest(unittest.TestCase):
         self.assertIn("sid'\"'\"'s config", command)
 
     def test_check_requires_the_current_definition(self):
-        H.merge(self.path, "/opt/onbelay")
-        self.assertTrue(H.check(self.path, "/opt/onbelay"))
+        H.merge(self.path, "/opt/agent-config")
+        self.assertTrue(H.check(self.path, "/opt/agent-config"))
         cfg = self.read()
         cfg["hooks"]["PreToolUse"] = [cfg["hooks"]["PreToolUse"][0]]
         with open(self.path, "w") as f:
             json.dump(cfg, f)
-        self.assertFalse(H.check(self.path, "/opt/onbelay"))
+        self.assertFalse(H.check(self.path, "/opt/agent-config"))
 
     def test_merge_removes_retired_tagged_lifecycle_hooks(self):
         self.original["hooks"]["Stop"] = [{"hooks": [{
             "type": "command",
-            "command": H._command("/old/onbelay", "check-docs.py"),
+            "command": H._command("/old/agent-config", "check-docs.py"),
             "timeout": 130,
             "statusMessage": "Checking documentation...",
         }]}]
         with open(self.path, "w") as f:
             json.dump(self.original, f)
-        H.merge(self.path, "/new/onbelay")
+        H.merge(self.path, "/new/agent-config")
         self.assertNotIn("Stop", self.read()["hooks"])
 
     def test_rejects_a_malformed_user_hook_before_rewriting(self):
@@ -185,18 +184,44 @@ class CodexHooksTest(unittest.TestCase):
         with open(self.path) as f:
             before = f.read()
         with self.assertRaises(ValueError):
-            H.merge(self.path, "/opt/onbelay")
+            H.merge(self.path, "/opt/agent-config")
         with open(self.path) as f:
             self.assertEqual(f.read(), before)
+
+    def test_replaces_a_0_4_onbelay_hook(self):
+        onbelay = {"description": "PreToolUse guardrails from onbelay", "hooks": {"PreToolUse": [{
+            "matcher": ".*", "hooks": [{"type": "command", "command": H._command(
+                "/old/onbelay/0.4.2", "guard-codex.py").replace("agent-config-hook-v1", "onbelay-hook-v1")}]}]}}
+        with open(self.path, "w") as f:
+            json.dump(onbelay, f)
+        H.merge(self.path, "/new/agent-config")
+        self.assertNotIn("onbelay", json.dumps(self.read()))
+        self.assertTrue(H.check(self.path, "/new/agent-config"))
+        self.assertEqual(len(self.commands("PreToolUse")), 1)
+
+    def test_strip_restores_the_backup_bytes_and_skips_files_without_ours(self):
+        original = '{"description":"mine","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"python3 ~/mine/audit.py"}]}]}}'
+        with open(self.path, "w") as f:
+            f.write(original)
+        H.strip(self.path)
+        with open(self.path) as f:
+            self.assertEqual(f.read(), original)
+        with open(self.path + H.BACKUP_SUFFIX, "w") as f:
+            f.write(original)
+        H.merge(self.path, "/opt/agent-config")
+        H.strip(self.path)
+        with open(self.path) as f:
+            self.assertEqual(f.read(), original)
+        self.assertFalse(os.path.exists(self.path + H.BACKUP_SUFFIX))
 
     def test_updates_a_symlink_target_without_detaching_it(self):
         target = self.path + ".target"
         os.rename(self.path, target)
         os.symlink(target, self.path)
         try:
-            H.merge(self.path, "/opt/onbelay")
+            H.merge(self.path, "/opt/agent-config")
             self.assertTrue(os.path.islink(self.path))
-            self.assertTrue(H.check(self.path, "/opt/onbelay"))
+            self.assertTrue(H.check(self.path, "/opt/agent-config"))
         finally:
             os.unlink(self.path)
             os.unlink(target)

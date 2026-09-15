@@ -13,9 +13,10 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guard_git  # noqa: E402
 import guard_parse  # noqa: E402
 import guard_rules  # noqa: E402
-from cases import CMD_CASES, PATH_CASES  # noqa: E402
+from cases import CMD_CASES, PATH_CASES, STRICT  # noqa: E402
 from fixtures import FEAT, MAIN  # noqa: E402
 
 
@@ -110,12 +111,10 @@ def test_every_db_wipe_rule_is_reachable():
     hole nobody notices.
     """
     probes = (
-        "mongosh --eval 'db.dropDatabase()'",
         "mongosh --eval 'db.users.drop()'",
         "mongo --eval 'db.events.deleteMany({})'",
         "redis-cli FLUSHALL",
         "rails db:drop",
-        "php artisan migrate:fresh",
     )
     fired = set()
     for cmd in probes:
@@ -136,8 +135,7 @@ def test_oversize_middle_agrees_with_the_rules():
     suites green.
 
     The assertion is agreement, not blocking. A class the rules do not block
-    must not block when buried either, which is what caught the parser
-    inventing mkfs and `dd of=/dev/` that no rule ever had.
+    must not block when buried either.
     """
     pad = ("echo " + "a" * 60 + "\n") * 520          # past MAX_ANALYSED
     tail = ("echo " + "a" * 60 + "\n") * 140         # past TAIL_ANALYSED
@@ -156,26 +154,24 @@ def test_oversize_middle_agrees_with_the_rules():
 OVERSIZE_PROBES = (
         "git push --force origin main", "git reset --hard HEAD~1",
         "git clean -fd", "git branch -D feature/x", "git filter-branch --all",
-        "git reflog expire --expire=now --all",
-        "git update-ref -d refs/heads/main",
         "psql app -c 'DROP TABLE users'", "psql app -c 'DELETE FROM users'",
         "npx prisma migrate reset", "supabase db reset",
         "redis-cli -h db.example.com FLUSHALL", "rails db:drop",
-        "php artisan migrate:fresh", "terraform destroy -auto-approve",
+        "terraform destroy -auto-approve",
         "kubectl delete namespace prod", "gh repo delete acme/app --yes",
         "gh api -X DELETE /repos/acme/app", "gh pr merge 1 --admin",
         "dropdb production", "vercel rm my-project --yes",
-        "aws s3 rm s3://bucket --recursive", "npm publish", "cargo publish",
+        "aws s3 rm s3://bucket --recursive", "npm publish",
         "twine upload dist/x.whl", "gem push x.gem", "poetry publish",
         "rm -rf /",
-        "mkfs.ext4 /dev/sda1", "dd if=/dev/zero of=/dev/sda",
+        "killall node", "curl -X DELETE https://api.example.com/x",
+        "gcloud sql instances delete db", "docker compose down -v", "docker compose down",
+        "chmod -R 777 storage", "rmdir /s /q C:\\", "npx drizzle-kit push --force",
+        "cat /proc/1/environ",
         # Production deploys, both shapes, plus the previews that must not move.
-        "vercel --prod", "fly deploy", "wrangler deploy", "modal deploy app.py",
+        "vercel --prod", "fly deploy", "wrangler deploy",
         "npx prisma migrate deploy",
         "vercel", "vercel ls", "wrangler dev", "npx prisma migrate dev",
-        # ...and the ordinary dd, which writes a file and must stay allowed
-        # both alone and buried.
-        "dd if=/dev/zero of=testfile bs=1M count=100",
         # ...and ordinary prose, which must not trip a signal either way.
         "echo 'the release notes mention a deleted table'",
 )
@@ -227,6 +223,30 @@ def test_segment_rules_are_named():
         elif got != expected:
             wrong.append(f"{cmd!r} was credited to {got!r}, wanted {expected!r}")
     return wrong
+
+
+def test_strict_mode():
+    """STRICT cases are allowed by default and refused with AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1."""
+    bad = []
+    guard_git.BLOCK_DIRECT_COMMITS = True
+    try:
+        for case in CMD_CASES:
+            if case[2] is not STRICT:
+                continue
+            hit = guard_rules.check_command(case[0], case[1])
+            if not hit:
+                bad.append(f"  should BLOCK in strict mode: {case[0]}")
+            elif len(case) > 3 and case[3].lower() not in hit[0].lower():
+                bad.append(f"  strict mode blocked for the WRONG reason: {case[0]}")
+    finally:
+        guard_git.BLOCK_DIRECT_COMMITS = False
+    env = dict(os.environ, AGENT_CONFIG_BLOCK_DIRECT_COMMITS="1")
+    out = subprocess.run([sys.executable, "-c", "import guard_git; print(guard_git.BLOCK_DIRECT_COMMITS)"],
+                         cwd=os.path.dirname(os.path.abspath(__file__)), env=env,
+                         capture_output=True, text=True).stdout.strip()
+    if out != "True":
+        bad.append("  AGENT_CONFIG_BLOCK_DIRECT_COMMITS=1 did not turn strict mode on")
+    return bad
 
 
 def test_git_call_budget():
@@ -333,7 +353,7 @@ PERF_BUDGETS = (
          "psql " + "postgres://u@localhost/a " * 500 + "-c 'DROP TABLE t'",
          "sqlite3 dev.db " + "x " * 4000 + "'DROP TABLE t'",
          "sqlite3 " + "a" * 40000 + ".db 'DROP TABLE t'",
-         "mongosh --eval '" + "x" * 40000 + "db.dropDatabase()'",
+         "mongosh --eval '" + "x" * 40000 + "db.users.drop()'",
          "redis-cli " + "k" * 40000 + " FLUSHALL",
          "rails " + "x" * 40000 + " db:drop",
          "psql " + "$PROD_URL " * 4000,
@@ -359,6 +379,7 @@ def main():
     # It also matters for mutation testing: counting a timing flake as a "kill"
     # made the guard's apparent mutation score roughly twice its real one.
     perf = "--no-perf" not in sys.argv
+    guard_git.BLOCK_DIRECT_COMMITS = False
     fails = []
     for case in CMD_CASES:
         # A fourth element pins WHICH rule fired, as a substring of the reason.
@@ -366,13 +387,13 @@ def main():
         # second, unrelated rule also blocked: a mutation pass found the short
         # `-f` force-push spelling deletable with the suite still green,
         # because on a protected branch the branch rule caught it anyway.
-        cmd, cwd, should = case[0], case[1], case[2]
+        cmd, cwd, should = case[0], case[1], case[2] is True
         want_reason = case[3] if len(case) > 3 else None
         hit = guard_rules.check_command(cmd, cwd)
         got = hit is not None
         if got != should:
             fails.append(f"  {'should BLOCK' if should else 'should ALLOW'}: {cmd}")
-        elif want_reason and want_reason.lower() not in hit[0].lower():
+        elif hit and want_reason and want_reason.lower() not in hit[0].lower():
             fails.append(f"  blocked for the WRONG reason: {cmd}\n"
                          f"      wanted {want_reason!r} in {hit[0]!r}")
         # Same command, argv-shaped. A host may hand over ["bash","-lc",cmd]
@@ -386,12 +407,13 @@ def main():
                 fails.append(f"  argv form disagrees with the string form: {cmd}\n"
                              f"      string={'BLOCK' if got else 'allow'} "
                              f"argv={'BLOCK' if argv else 'allow'}")
-    for path, writing, should in PATH_CASES:
-        got = guard_rules.check_path(path, writing) is not None
+    for path, writing, should, *change in PATH_CASES:
+        got = guard_rules.check_path(path, writing, *change) is not None
         if got != should:
             fails.append(f"  {'should BLOCK' if should else 'should ALLOW'}: path {path}")
 
     fails += test_ordinary_work_is_never_refused()
+    fails += test_strict_mode()
     fails += test_git_call_budget()
     for name in test_every_db_wipe_rule_is_reachable():
         fails.append(f"  DB_WIPE_RULES row {name!r} is unreachable: no command fires it")
@@ -425,6 +447,7 @@ def main():
     # this suite had made up. A suite that miscounts itself has no business
     # grading anything else.
     total = (len(CMD_CASES) + len(PATH_CASES) + len(ordinary_commands())
+             + sum(1 for c in CMD_CASES if c[2] is STRICT) + 1
              + len(guard_rules.DB_WIPE_RULES) + len(guard_rules.SEGMENT_RULES)
              + 2 * len(guard_parse.RUNNER_NAMES) + len(OVERSIZE_PROBES)
              + (PERF_ASSERTIONS if perf else 0))

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Architect"
-  short_description: "Design or survey modules, seams, and migrations"
-  default_prompt: "Use $architect to design this boundary or find the highest-leverage architecture improvement."
