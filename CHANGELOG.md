@@ -6,12 +6,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 
-- Cursor: `install` wires `~/.cursor/hooks.json` when `~/.cursor` exists. A `preToolUse` hook guards Shell, Read, Write, Delete, and MCP tools, and the prompt hook refuses pasted keys in the editor. Cursor's CLI does not run prompt hooks yet, and cloud agents only run project hooks.
+- Cursor support: `install` adds the guard to `~/.cursor/hooks.json` when `~/.cursor` exists, for Shell, Read, Write, Delete, MCP tools, and pasted keys. Cursor's CLI does not run prompt hooks yet, and cloud agents only run project hooks.
 
 ### Changed
 
 - When Cursor loads the Claude Code hooks from `settings.json`, they defer to the Cursor hook instead of deciding twice.
-- `scripts/install_codex_hooks.py` is now `scripts/install_hooks_json.py` and merges both Codex and Cursor `hooks.json`.
+- The refusal for removing the guard's hook entries from settings no longer tells you to use an Edit tool, which Cursor does not have.
+- `agent-config init` says it was removed and points at `agent-config install`.
+- The README notes that the workflow skills were split out.
 
 ## [0.5.1] - 2026-09-15
 

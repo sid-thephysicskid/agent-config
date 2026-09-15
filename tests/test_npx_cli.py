@@ -72,10 +72,11 @@ class NpxCliTest(unittest.TestCase):
         result = subprocess.run(["npm", "pack", "--dry-run", "--json", "--ignore-scripts"],
                                 cwd=ROOT, text=True, capture_output=True, check=True)
         files = {entry["path"] for entry in packed(result.stdout)["files"]}
-        for path in ("bin/agent-config.js", "hooks/guard-bash.py", "hooks/guard-prompt.py", "install.sh",
-                     "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
+        for path in ("bin/agent-config.js", "hooks/guard-bash.py", "hooks/guard-cursor.py", "hooks/guard-prompt.py",
+                     "install.sh", "uninstall.sh", "LICENSE", "README.md", "VERSION", "scripts/install_settings.py",
                      "scripts/install_hooks_json.py", "scripts/migrate-legacy.sh"):
             self.assertIn(path, files)
+        self.assertNotIn("scripts/install_codex_hooks.py", files)
         for prefix in ("tests/", "docs/"):
             self.assertFalse(any(p.startswith(prefix) for p in files), prefix)
         hooks = {os.path.basename(p) for p in files if p.startswith("hooks/")}
