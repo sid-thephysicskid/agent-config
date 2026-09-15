@@ -9,9 +9,6 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from guard_adapter import log  # noqa: E402
-
 # One regex per kind and no leading \b: a literal prefix lets re skip ahead, 10x faster on 200KB.
 KINDS = [(kind, re.compile(pattern, re.ASCII)) for kind, pattern in (
     ("Anthropic API key", r"sk-ant-(?:api03|admin01)-[\w-]{93}AA\b"),
@@ -36,7 +33,9 @@ def main():
         kind = next((kind for kind, pattern in KINDS
                      if any(real(m.group()) for m in pattern.finditer(prompt))), None)
     except Exception as error:  # noqa: BLE001
-        # The type only: the payload may hold the very secret we look for.
+        # Imported here: guard_adapter costs ~15ms per prompt. Log the type only, never the payload.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from guard_adapter import log
         log("guard-prompt failed open", type(error).__name__)
         sys.exit(0)
     if kind:
