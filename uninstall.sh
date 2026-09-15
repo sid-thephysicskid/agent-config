@@ -66,7 +66,7 @@ REMOVE_OPERATOR=0
 # re-cloning the repo makes both scripts read our own previous symlinks as
 # someone else's: install refuses 21 paths it actually owns, and uninstall walks
 # away from 21 links it made, reporting success either way.
-ORIGINS="$CLAUDE_ROOT/.onbelay-origins"
+ORIGINS="$CLAUDE_ROOT/.agent-config-origins"
 
 # Same rename, opposite direction: a 0.3.x machine could not be cleanly REMOVED
 # either. It walked away from 33 links it owned and reported success.
@@ -147,7 +147,7 @@ LINK_DIRS=()
 (( REMOVE_GUARD )) && LINK_DIRS+=("$CLAUDE_ROOT/hooks")
 (( REMOVE_OPERATOR )) && LINK_DIRS+=("$CLAUDE_ROOT/output-styles")
 
-echo "Removing onbelay $PROFILE wiring ($REPO)"
+echo "Removing agent-config $PROFILE wiring ($REPO)"
 echo
 echo "Symlinks"
 if (( REMOVE_WORKFLOW )); then
@@ -160,8 +160,8 @@ if (( REMOVE_WORKFLOW )); then
   for p in "$CLAUDE_ROOT/CLAUDE.md" "$CODEX_ROOT/AGENTS.md"; do
     if [[ -e "$p" || -L "$p" ]]; then
       python3 "$REPO/scripts/manage_instructions.py" strip "$p" \
-        && ok "removed On Belay routing from $p" \
-        || warn "could not remove On Belay routing from $p"
+        && ok "removed agent-config routing from $p" \
+        || warn "could not remove agent-config routing from $p"
     fi
   done
 fi
@@ -182,7 +182,7 @@ echo
 echo "Hooks"
 SETTINGS="$CLAUDE_ROOT/settings.json"
 if (( REMOVE_GUARD )) && [[ -f "$SETTINGS" ]]; then
-  if ! grep -qE 'onbelay-hook-v1|python3?[^\"]*[./]claude/hooks/(guard-(bash|files)|check-docs|welcome)\.py' "$SETTINGS" 2>/dev/null; then
+  if ! grep -qE 'agent-config-hook-v1|python3?[^\"]*[./]claude/hooks/(guard-(bash|files)|check-docs|welcome)\.py' "$SETTINGS" 2>/dev/null; then
     skip "settings.json has none of our hooks, left untouched"
   elif python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SETTINGS" 2>/dev/null; then
     cp "$SETTINGS" "$SETTINGS.bak-uninstall-$(date +%Y%m%d-%H%M%S)"
@@ -200,7 +200,7 @@ CODEX_HOOKS="$CODEX_ROOT/hooks.json"
 if (( REMOVE_GUARD )) && [[ -f "$CODEX_HOOKS" ]] \
    && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CODEX_HOOKS" 2>/dev/null; then
   python3 "$REPO/scripts/install_codex_hooks.py" strip "$CODEX_HOOKS"
-  ok "onbelay hooks stripped from Codex hooks.json"
+  ok "agent-config hooks stripped from Codex hooks.json"
 else
   skip "codex hooks.json missing or invalid, left alone"
 fi
@@ -239,7 +239,7 @@ if ! managed_state_remains; then
   rm -f "$ORIGINS"
 fi
 
-CONFLICT_STATE="$HOME/.local/share/onbelay/conflicts.json"
+CONFLICT_STATE="$HOME/.local/share/agent-config/conflicts.json"
 if [[ -f "$CONFLICT_STATE" ]]; then
   python3 "$REPO/scripts/manage_conflicts.py" restore "$CONFLICT_STATE" \
     && ok "restored skills backed up during install" \

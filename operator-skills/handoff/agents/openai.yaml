@@ -1,4 +1,0 @@
-interface:
-  display_name: "Handoff"
-  short_description: "Carry active work into a fresh session"
-  default_prompt: "Use $handoff to prepare a redacted continuation note for the next session."

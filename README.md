@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/assets/wordmark.svg" width="820" alt="On Belay. A rope drops from an anchor and curves back to level: a fall being caught. Guardrails for coding agents. The rope does not stop the climb, it catches the fall.">
+  <img src="docs/assets/wordmark.svg" width="820" alt="agent-config. A rope drops from an anchor and curves back to level: a fall being caught. Guardrails for coding agents. The rope does not stop the climb, it catches the fall.">
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@sid-thephysicskid/onbelay"><img alt="npm" src="https://img.shields.io/npm/v/%40sid-thephysicskid%2Fonbelay?style=flat-square&labelColor=0d1117&color=f0883e"></a>
-  <a href="https://github.com/sid-thephysicskid/onbelay/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sid-thephysicskid/onbelay/ci.yml?branch=main&style=flat-square&labelColor=0d1117&label=ci"></a>
+  <a href="https://www.npmjs.com/package/@sid-thephysicskid/agent-config"><img alt="npm" src="https://img.shields.io/npm/v/%40sid-thephysicskid%2Fagent-config?style=flat-square&labelColor=0d1117&color=f0883e"></a>
+  <a href="https://github.com/sid-thephysicskid/agent-config/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sid-thephysicskid/agent-config/ci.yml?branch=main&style=flat-square&labelColor=0d1117&label=ci"></a>
   <img alt="test cases" src="https://img.shields.io/badge/test%20cases-1%2C973-3fb950?style=flat-square&labelColor=0d1117">
   <img alt="dependencies" src="https://img.shields.io/badge/runtime%20deps-0-3fb950?style=flat-square&labelColor=0d1117">
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-8b949e?style=flat-square&labelColor=0d1117"></a>
@@ -27,7 +27,7 @@ No model call, no network, no API key. It's plain Python that reads the command 
 ## Install
 
 ```bash
-npx @sid-thephysicskid/onbelay@latest install
+npx @sid-thephysicskid/agent-config@latest install
 ```
 
 Restart your agent and you're done. Codex will ask you to review the new hooks in `/hooks`. Works on macOS and Linux, and needs Node 20+ and Python 3.9+.
@@ -35,7 +35,7 @@ Restart your agent and you're done. Codex will ask you to review the new hooks i
 **Don't want my skills?** Fair. They're opinionated and you may already have your own. Take the guardrails on their own:
 
 ```bash
-npx @sid-thephysicskid/onbelay@latest install guard
+npx @sid-thephysicskid/agent-config@latest install guard
 ```
 
 That installs the hooks and nothing else: no skills directory, no instruction files, no routing. If you already have a `~/.codex`, it does wire the guard into `~/.codex/hooks.json` too, backing up your existing file first, because a guard that only covers one of your two agents is not doing its job. It's the piece I'd want on a machine even if I disagreed with everything else here.
@@ -49,8 +49,8 @@ That installs the hooks and nothing else: no skills directory, no instruction fi
 Re-running any of them repairs or upgrades what's there. Later, `doctor` checks that the guard still *decides*, not just that it's installed:
 
 ```bash
-npx @sid-thephysicskid/onbelay@latest doctor
-npx @sid-thephysicskid/onbelay@latest uninstall
+npx @sid-thephysicskid/agent-config@latest doctor
+npx @sid-thephysicskid/agent-config@latest uninstall
 ```
 
 Uninstall puts everything back, including any skill of yours that was moved aside.
@@ -72,12 +72,12 @@ Your existing hooks, settings, and unrelated skills stay exactly where they are.
 <br>
 
 ```bash
-git clone https://github.com/sid-thephysicskid/onbelay.git
-cd onbelay
+git clone https://github.com/sid-thephysicskid/agent-config.git
+cd agent-config
 ./install.sh standard
 ```
 
-Source installs use symlinks, so keep the checkout where it is. The npm install copies into `~/.local/share/onbelay/<version>/` instead, which is why it's the better default.
+Source installs use symlinks, so keep the checkout where it is. The npm install copies into `~/.local/share/agent-config/<version>/` instead, which is why it's the better default.
 
 </details>
 
@@ -134,7 +134,7 @@ It doesn't run them as a waterfall. It picks the one that matches and goes.
 `bootstrap` and `setup` both give a project one real `AGENTS.md` with a `CLAUDE.md` symlink pointing at it, so both agents read the same contract instead of drifting apart. You can also create it directly, and an instruction file you already have is never replaced:
 
 ```bash
-npx @sid-thephysicskid/onbelay@latest init
+npx @sid-thephysicskid/agent-config@latest init
 ```
 
 ### The extras
@@ -153,9 +153,9 @@ Along with those, `--extras` adds two output styles, `terse` and `eli5`, for whe
 
 It will be, sometimes. A guard that cries wolf gets switched off, so a refusal of ordinary work counts as a defect here rather than the price of admission.
 
-The block message should always name an alternative that does the same job. If it doesn't, that's the bug. If the branch rules are what's in your way, set `ONBELAY_PROTECTED_BRANCHES` in your shell profile: a comma-separated list replaces the default, an empty value turns them off, and `doctor` reports what you set.
+The block message should always name an alternative that does the same job. If it doesn't, that's the bug. If the branch rules are what's in your way, set `AGENT_CONFIG_PROTECTED_BRANCHES` in your shell profile: a comma-separated list replaces the default, an empty value turns them off, and `doctor` reports what you set.
 
-Otherwise [open an issue](https://github.com/sid-thephysicskid/onbelay/issues) with the exact command. Every rule carries a paired case for the nearest legitimate command it must not refuse, so a false positive is a missing case and gets treated as one.
+Otherwise [open an issue](https://github.com/sid-thephysicskid/agent-config/issues) with the exact command. Every rule carries a paired case for the nearest legitimate command it must not refuse, so a false positive is a missing case and gets treated as one.
 
 ---
 

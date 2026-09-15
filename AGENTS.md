@@ -4,7 +4,7 @@ These are conservative defaults for agents changing software. Repository instruc
 
 ## Safety guardrails
 
-When the On Belay guard is installed, its PreToolUse hooks block common high-impact mistakes before execution. The written rules still apply when the hooks are absent. They are a safety net for a careless agent, not a security boundary. Do not work around a block or ask the user to disable it.
+When the agent-config guard is installed, its PreToolUse hooks block common high-impact mistakes before execution. The written rules still apply when the hooks are absent. They are a safety net for a careless agent, not a security boundary. Do not work around a block or ask the user to disable it.
 
 - Never commit or push on `main`, `master`, `prod`, `production`, `trunk`, or `release`. Branch and use a pull request. Merge, revert, cherry-pick, and `am` can create commits too. Abort, skip, and quit forms are safe exits. A continue form may write a commit, so check the target branch yourself before continuing an in-progress operation.
 - Never force-push, use `reset --hard`, run `clean -f`, discard the whole working tree, or force-delete a branch. The one exception is `git push --force-with-lease=<branch>:<sha>` on your own open PR branch after a rebase. Use the current branch and a full pre-fetch commit SHA. It is refused on protected branches.
@@ -128,7 +128,7 @@ Do not spend time re-deriving these. Every one was confirmed by hitting it:
 Once the package exists on npm, do this and stop using a token:
 
 1. npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions.
-   Organization or user `sid-thephysicskid`, repository `onbelay`, workflow
+   Organization or user `sid-thephysicskid`, repository `agent-config`, workflow
    `publish.yml`, environment empty, tick `npm publish`. Save. A passkey works
    here; this is the browser, not the CLI.
 2. In `.github/workflows/publish.yml`: delete the `NODE_AUTH_TOKEN` env block
