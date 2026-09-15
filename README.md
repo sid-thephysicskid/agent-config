@@ -8,7 +8,7 @@ This is a hook that stops that stuff before it runs. Everything else goes throug
 npx @sid-thephysicskid/agent-config@latest install
 ```
 
-Claude Code and Codex. macOS or Linux, Node 20+, Python 3.9+. No network, no model calls, no dependencies.
+Claude Code and Codex. macOS or Linux, Node 20+, Python 3.9+. The hooks make no network or model calls. No dependencies.
 
 ## What it stops
 
@@ -46,7 +46,7 @@ Don't want direct commits to `main` either? `export AGENT_CONFIG_BLOCK_DIRECT_CO
 
 ## The honest bit
 
-It's a seatbelt, not a vault. An agent that really wants to can get around it; known gaps are in [evals/redteam-candidates.txt](evals/redteam-candidates.txt). If a rule crashes, it fails open and your agent keeps working.
+It's a seatbelt, not a vault. An agent that really wants to can get around it; known gaps are in [tests/redteam-candidates.txt](tests/redteam-candidates.txt). If a rule crashes, it fails open and your agent keeps working.
 
 ```bash
 npx @sid-thephysicskid/agent-config@latest doctor      # check it still blocks

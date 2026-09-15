@@ -8,7 +8,6 @@ import json
 import os
 import re
 import sys
-import time
 
 # One regex per kind and no leading \b: a literal prefix lets re skip ahead, 10x faster on 200KB.
 KINDS = [(kind, re.compile(pattern, re.ASCII)) for kind, pattern in (
@@ -18,26 +17,26 @@ KINDS = [(kind, re.compile(pattern, re.ASCII)) for kind, pattern in (
     ("AWS access key", r"(?:AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}\b"),
     ("Stripe secret key", r"[sr]k_(?:live|prod)_[A-Za-z0-9]{10,99}\b"),
     ("Slack token", r"xoxb-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*|xox[pe](?:-[0-9]{10,13}){3}-[a-zA-Z0-9-]{28,34}"),
-    ("Google API key", r"AIza[\w-]{35}\b"),
     ("npm token", r"npm_[A-Za-z0-9]{36}\b"),
-    ("private key", r"-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY-----"),
+    ("private key", r"-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY-----\s*(?:[A-Za-z0-9+/=]\s*){40}"),
 )]
+
+
+def real(key):
+    # Doc examples (AWS ids ending in EXAMPLE) and one-character placeholders are not keys.
+    return not key.endswith("EXAMPLE") and len(set(re.sub(r"[^A-Za-z0-9]", "", key)[-12:])) > 2
 
 
 def main():
     try:
         prompt = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace"))["prompt"]
-        kind = next((kind for kind, pattern in KINDS if pattern.search(prompt)), None)
+        kind = next((kind for kind, pattern in KINDS
+                     if any(real(m.group()) for m in pattern.finditer(prompt))), None)
     except Exception as error:  # noqa: BLE001
-        try:
-            os.makedirs(os.path.expanduser("~/.claude"), exist_ok=True)
-            # The type only: the payload may hold the very secret we look for.
-            with os.fdopen(os.open(os.path.expanduser("~/.claude/guard-failopen.log"),
-                                   os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600), "a") as log:
-                log.write("%s guard-prompt failed open: %s\n"
-                          % (time.strftime("%Y-%m-%d %H:%M:%S"), type(error).__name__))
-        except Exception:  # noqa: BLE001
-            pass
+        # Imported here: guard_adapter costs ~15ms per prompt. Log the type only, never the payload.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from guard_adapter import log
+        log("guard-prompt failed open", type(error).__name__)
         sys.exit(0)
     if kind:
         sys.stderr.write(

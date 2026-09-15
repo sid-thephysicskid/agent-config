@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 
-LOG = os.path.expanduser("~/.claude/guard-failopen.log")
+LOG = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "guard-failopen.log")
 MAX_LOG = 256 * 1024
 
 def log(why, detail=""):

@@ -22,7 +22,7 @@ LEGACY_DESCRIPTIONS = {
     "Guardrails shared with Claude Code via agent-config/hooks",
     "Lifecycle hooks shared with Claude Code via agent-config/hooks",
 }
-LEGACY_SCRIPTS = {"guard-codex.py", "check-docs.py", "welcome.py"}
+LEGACY_SCRIPTS = {"guard-codex.py"}
 WIRING = (
     ("PreToolUse", ".*", "guard-codex.py", 5, "Checking guardrails..."),
     ("UserPromptSubmit", None, "guard-prompt.py", 5, "Checking the prompt for keys..."),

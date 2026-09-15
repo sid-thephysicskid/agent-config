@@ -5,7 +5,6 @@
     install_settings.py check <path> <hook dir>   exit 1 unless wired
     install_settings.py strip <path>              remove exactly what merge added
     install_settings.py validate <path>           exit 1 on a shape merge would guess about
-    install_settings.py deny                      print the deny rules
 
 Python 3.9, stdlib only.
 """
@@ -28,8 +27,8 @@ DENY = (
     "Read(**/id_ed25519)",
     "Read(**/.pgpass)",
     "Read(**/.netrc)",
-    "Write(~/.claude/hooks/**)",
 )
+_HOOKS_DENY = re.compile(r"^Write\(.+/\*\*\)$")
 
 WIRING = (
     ("PreToolUse", "Bash", "guard-bash.py", 5),
@@ -48,7 +47,14 @@ _OUR_SHAPE = re.compile(
     r"~/\.claude/hooks/\1; fi; exit 0$")
 _OURS = re.compile(
     r"python3?\s+\S*[./]claude/hooks/"
-    r"(guard-(bash|files)|check-docs|welcome)\.py(\s|;|$)")
+    r"guard-(bash|files)\.py(\s|;|$)")
+
+
+def deny_rules(hook_dir):
+    # Permission paths: ~/ is home, // is absolute.
+    home = os.path.expanduser("~") + "/"
+    where = "~/" + hook_dir[len(home):] if hook_dir.startswith(home) else "/" + hook_dir
+    return DENY + ("Write(%s/**)" % where.rstrip("/"),)
 
 
 def _cmd(script, hook_dir):
@@ -109,7 +115,7 @@ def _load_managed_denies(path):
         raise ValueError("managed deny state is not a regular file")
     with open(state) as f:
         managed = json.load(f)
-    if not isinstance(managed, list) or any(rule not in DENY for rule in managed):
+    if not isinstance(managed, list) or any(rule not in DENY and not _HOOKS_DENY.match(str(rule)) for rule in managed):
         raise ValueError("managed deny state is invalid")
     return managed
 
@@ -172,7 +178,7 @@ def merge(path, hook_dir):
         entry["hooks"].append(
             {"type": "command", "command": _cmd(script, hook_dir), "timeout": timeout})
     deny = cfg.setdefault("permissions", {}).setdefault("deny", [])
-    for rule in DENY:
+    for rule in deny_rules(hook_dir):
         if rule not in deny:
             deny.append(rule)
             if rule not in managed:
@@ -190,11 +196,6 @@ def strip(path):
     state = _deny_state_path(path)
     managed = set(_load_managed_denies(path))
     changed = _remove_ours(cfg)
-    orphaned = [r for r in cfg.get("permissions", {}).get("deny", [])
-                if r in DENY and r not in managed]
-    if orphaned and changed:
-        sys.stderr.write("left %d deny rule(s) in %s: no ownership record, so they may be yours.\n"
-                         % (len(orphaned), path))
     perms = cfg.get("permissions", {})
     if managed and isinstance(perms.get("deny"), list):
         perms["deny"] = [r for r in perms["deny"] if r not in managed]
@@ -238,9 +239,6 @@ def check(path, hook_dir):
 
 def main(argv):
     action = argv[1] if len(argv) > 1 else ""
-    if action == "deny" and len(argv) == 2:
-        print("\n".join(DENY))
-        return 0
     if action == "merge" and len(argv) == 4:
         merge(argv[2], argv[3])
         return 0

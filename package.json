@@ -1,6 +1,6 @@
 {
   "name": "@sid-thephysicskid/agent-config",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Guardrails for Claude Code and Codex: hooks that stop force pushes, secret leaks, and destructive commands before they run.",
   "license": "MIT",
   "author": "Sid Abhinav",
@@ -22,7 +22,7 @@
     "VERSION",
     "bin/",
     "hooks/",
-    "!hooks/[!g]*",
+    "!hooks/__pycache__",
     "install.sh",
     "scripts/install_codex_hooks.py",
     "scripts/migrate-legacy.sh",

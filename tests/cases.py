@@ -28,6 +28,15 @@ CMD_CASES = [
     ('cat ~/.config/gcloud/application_default_credentials.json', MAIN, True),
     ('cat config/secrets.env', MAIN, True),
     ('cp config/production.env /tmp/x', MAIN, True),
+    # Sourcing loads the file without printing it; writing or reading it still refuses.
+    ('source .env', MAIN, False),
+    ('. .env', MAIN, False),
+    ('set -a; source .env; set +a', MAIN, False),
+    ('set -a && . ./.env.local && set +a && npm run dev', MAIN, False),
+    ('source ~/.ssh/id_rsa', MAIN, True),
+    ('source .env; echo $API_KEY', MAIN, True),
+    ('echo "X=y" >> .env', MAIN, True),
+    ('echo X=y | tee -a .env', MAIN, True),
     # The template and ordinary files must stay readable.
     ('cat README.md', MAIN, False),
     ('cat ~/.gitconfig', MAIN, False),
@@ -1300,8 +1309,7 @@ CMD_CASES += [
     ("yarn npm publish", FEAT, True, "irreversible"),
     # yarn's OWN publish, which had no case at all. The `(npm|pnpm|bun)` row
     # catches `yarn npm publish` above, so the suite stayed green with the yarn
-    # row deleted while `yarn publish` walked through. Found by tests/mutate.py,
-    # which is the only thing here that can see a live rule nothing pins.
+    # row deleted while `yarn publish` walked through.
     ("yarn publish", FEAT, True, "irreversible"),
     ("yarn --cwd packages/core publish", FEAT, True, "irreversible"),
     # Same shape again: a live row nothing pinned. The database rules
@@ -1418,8 +1426,8 @@ CMD_CASES += [
     ("git cherry-pick abc1234", FEAT, False),
     # `rm -rf /*`: the glob strip leaves an empty base, and that clause was the
     # only thing catching it.
-    ("rm -rf /*", FEAT, True, "current directory"),
-    ("rm -rf /", FEAT, True),
+    ("rm -rf /*", FEAT, True, "filesystem root"),
+    ("rm -rf /", FEAT, True, "filesystem root"),
     # PUBLIC_CERT: split so each half is pinned on its own.
     ("cat certs/ca.pem", FEAT, False),                 # basename list only
     ("cat /etc/ssl/private-key.pem", FEAT, False),     # path prefix only
@@ -2073,7 +2081,7 @@ CMD_CASES += [
 # merge.
 #
 # The one thing the old runner asserted that nothing else did was that a
-# command and its argv form agree. hooks/tests.py now asserts that on every
+# command and its argv form agree. tests/rules.py now asserts that on every
 # case here, which is 1,200-odd rather than these 375, and doing so found 66
 # real disagreements.
 # ===========================================================================
@@ -2389,10 +2397,9 @@ CMD_CASES += [
     ('for f in src/*.ts; do npx tsc --noEmit "$f"; done', FEAT, False),
     ('if [ -f .env.example ]; then cp .env.example .env.local.tpl; fi', FEAT, False),
     ('test -d node_modules || npm ci', FEAT, False),
-    ('python3 hooks/tests.py --no-perf', FEAT, False),
-    ('python3 tests/mutate.py', FEAT, False),
+    ('python3 tests/rules.py --no-perf', FEAT, False),
     ('grep -n "DROP TABLE" hooks/guard_rules.py', FEAT, False),
-    ('rg "rm -rf" hooks/tests.py', FEAT, False),
+    ('rg "rm -rf" tests/rules.py', FEAT, False),
     ('git diff hooks/guard_rules.py', FEAT, False),
     ('./install.sh --check', FEAT, False),
     ('bash tests/install_test.sh', FEAT, False),
@@ -2693,6 +2700,10 @@ PATH_CASES += [
     (f"{HOME}/.claude/settings.json", True, True, {"edits": [{"old_string": "agent-config-hook-v1", "new_string": ""}]}),
     (SETTINGS, True, False, {"content": SETTINGS_BODY.replace("sonnet", "opus")}),
     (SETTINGS, True, True, {"content": '{"model": "opus"}'}),
+    (SETTINGS, True, True, {"content": SETTINGS_BODY.split(', "UserPromptSubmit"')[0] + "}}"}),
+    (f"{HOME}/.claude/settings.json", True, True, {"old_string": '{"command": "python3 ~/.claude/hooks/guard-prompt.py"}', "new_string": ""}),
+    (f"{HOME}/.claude/settings.json", True, False, {"old_string": '{"command": "python3 ~/mine/prompt.py"}', "new_string": ""}),
+    (f"{HOME}/.codex/hooks.json", True, True, {"patch": '*** Update File: hooks.json\n@@\n-  "command": "python3 guard-prompt.py"\n'}),
     (f"{HOME}/.codex/hooks.json", True, False, {"patch": '*** Update File: hooks.json\n@@\n-  "timeout": 5\n+  "timeout": 9\n'}),
     (f"{HOME}/.codex/hooks.json", True, True, {"patch": '*** Update File: hooks.json\n@@\n-  "command": "python3 guard-codex.py"\n'}),
     (f"{HOME}/.claude/hooks/guard-bash.py", True, True, {"old_string": "a", "new_string": "b"}),

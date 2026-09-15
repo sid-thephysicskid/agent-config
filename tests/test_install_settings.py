@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """settings.json merge, strip, and validation. Python 3.9, stdlib only."""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -40,7 +42,7 @@ class MergeTest(Base):
         S.merge(self.path, HOOKS)
         first = self.read()
         self.assertEqual(len(self.commands(first)), len(S.WIRING))
-        self.assertEqual(first["permissions"]["deny"], list(S.DENY))
+        self.assertEqual(first["permissions"]["deny"], list(S.deny_rules(HOOKS)))
         S.merge(self.path, HOOKS)
         self.assertEqual(self.read(), first)
         self.assertTrue(S.check(self.path, HOOKS))
@@ -63,7 +65,7 @@ class MergeTest(Base):
             "if test -f ~/.claude/hooks/guard-bash.py; then exec python3 ~/.claude/hooks/guard-bash.py; fi; exit 0",
             ": onbelay-hook-v1:guard-bash.py; if test -f /x/guard-bash.py; then exec python3 /x/guard-bash.py; fi; exit 0",
             ": agent-config-hook-v1:gone.py; if test -f /x/gone.py; then exec python3 /x/gone.py; fi; exit 0",
-            "python3 ~/.claude/hooks/check-docs.py",
+            "python3 ~/.claude/hooks/guard-files.py",
         ]
         self.write({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
             {"type": "command", "command": c} for c in old]}],
@@ -72,6 +74,14 @@ class MergeTest(Base):
         cmds = self.commands()
         self.assertEqual(len(cmds), len(S.WIRING))
         self.assertNotIn("Stop", self.read()["hooks"])
+
+    def test_the_hooks_deny_rule_follows_the_hook_dir(self):
+        home = os.path.expanduser("~")
+        self.assertEqual(S.deny_rules(home + "/.claude/hooks")[-1], "Write(~/.claude/hooks/**)")
+        self.assertEqual(S.deny_rules("/srv/cc/hooks")[-1], "Write(//srv/cc/hooks/**)")
+        S.merge(self.path, "/srv/cc/hooks")
+        S.strip(self.path)
+        self.assertEqual(os.listdir(self.dir.name), [])
 
     def test_updates_a_symlink_target_without_detaching_it(self):
         target = os.path.join(self.dir.name, "dots.json")
@@ -138,6 +148,15 @@ class StripTest(Base):
         self.write(cfg)
         S.strip(self.path)
         self.assertEqual(self.read(), {"permissions": {"deny": ["Bash(git reset --hard:*)"]}, "theme": "dark"})
+
+    def test_says_nothing_about_deny_rules_the_user_already_had(self):
+        self.write({"permissions": {"deny": ["Read(**/.env)"]}})
+        S.merge(self.path, HOOKS)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            S.strip(self.path)
+        self.assertEqual(err.getvalue(), "")
+        self.assertEqual(self.read(), {"permissions": {"deny": ["Read(**/.env)"]}})
 
     def test_a_file_we_created_is_removed(self):
         S.merge(self.path, HOOKS)

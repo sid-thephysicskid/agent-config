@@ -19,7 +19,7 @@ GUARD_OWN_FILES = re.compile(r"(^|/)\.(claude|codex)/hooks(?:/|$)")
 # Settings files that wire the guard in: editable, as long as the guard's own hook entries survive.
 GUARD_CONFIG = re.compile(
     r"(^|/)\.(claude|codex)/(settings\.json|settings\.local\.json|hooks\.json)$")
-GUARD_HOOK = re.compile(r"guard-(?:bash|files|codex)\.py|(?:agent-config|onbelay)-hook-v1")
+GUARD_HOOK = re.compile(r"guard-(?:bash|files|codex|prompt)\.py|(?:agent-config|onbelay)-hook-v1")
 
 PAYLOAD_ROOT = "~/.local/share/agent-config"
 

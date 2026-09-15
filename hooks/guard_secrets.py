@@ -45,6 +45,10 @@ def check_env_print(raw, line):
 
 SECRET_FIX = ("use the .example variant for variable names; never read, copy, "
               "or print the real values")
+ENV_WRITE_FIX = "run `npx @sid-thephysicskid/agent-config secret NAME` in your terminal"
+
+# Sourcing an env file loads it without printing it.
+SOURCE_ENV = re.compile(r"^\s*(?:source|\.)\s+(\S+)\s*$")
 
 SAFE_SUFFIX = re.compile(r"\.(example|sample|template|dist|tpl)$", re.I)
 
@@ -277,6 +281,9 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
         return None
     if NON_DISCLOSING.match(head) and not piped:
         return None
+    sourced = SOURCE_ENV.match(head)
+    if sourced and not piped and ENVISH.search(normalize_path(sourced.group(1).strip("'\""))):
+        return None
     search_pattern = None
     if PATTERN_FIRST_OPERAND.match(head):
         for tok in tokens(seg)[1:]:
@@ -311,8 +318,9 @@ def check_secrets_cmd(seg, loose=True, piped=False, stripped=None):
                 continue
             if search_pattern is not None and tok == search_pattern:
                 continue        # the pattern being searched for, not a file
-            return (f"a command touching '{tok}', which holds live secrets.",
-                    SECRET_FIX)
+            fix = ENV_WRITE_FIX if ENVISH.search(p) and re.search(
+                r"(>|\btee\b(\s+-\S+)*)\s*['\"]?" + re.escape(tok), seg) else SECRET_FIX
+            return (f"a command touching '{tok}', which holds live secrets.", fix)
     loose_seg = seg
     if EXCLUDES_CAPABLE.match(head):
         loose_seg = re.sub(r"--(exclude|ignore|exclude-from|exclude-tag)(=|\s+)\S+", " ", seg)

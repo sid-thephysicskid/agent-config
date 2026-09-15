@@ -27,7 +27,6 @@ chk "three Claude hooks" "$(grep -c 'agent-config-hook-v1' "$H/.claude/settings.
 chk "one Codex hook" "$(grep -c 'guard-codex.py' "$H/.codex/hooks.json")" 1
 chk "one Codex prompt hook" "$(grep -c 'guard-prompt.py' "$H/.codex/hooks.json")" 1
 chk "guard linked" "$(readlink "$H/.claude/hooks/guard-bash.py")" "$S/repo/hooks/guard-bash.py"
-chk "tests are not linked" "$(yes_no test -e "$H/.claude/hooks/tests.py")" no
 chk "no instruction files" "$(yes_no test -e "$H/.claude/CLAUDE.md" -o -e "$H/.codex/AGENTS.md")" no
 chk "check exits 0" "$(install --check)" 0
 chk "unknown flag refused" "$(install --dry-run)" 1
@@ -38,7 +37,7 @@ run_hook() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"/"
 chk "rm -rf / blocked" "$(run_hook 'rm -rf /')" 2
 chk "ls allowed" "$(run_hook 'ls')" 0
 pcmd="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"])' "$H/.claude/settings.json")"
-chk "pasted token refused" "$(printf '{"prompt":"gh%s_%036d"}' p 0 | HOME="$H" sh -c "$pcmd" >/dev/null 2>&1; echo $?)" 2
+chk "pasted token refused" "$(printf '{"prompt":"gh%s_%s"}' p "$(printf 'Ab3xQ9%.0s' 1 2 3 4 5 6)" | HOME="$H" sh -c "$pcmd" >/dev/null 2>&1; echo $?)" 2
 mv "$H/.claude/hooks" "$H/hooks.off"
 chk "missing hooks allow" "$(run_hook 'rm -rf /')" 0
 mv "$H/hooks.off" "$H/.claude/hooks"
@@ -72,6 +71,19 @@ chk "settings.json byte-identical" "$(yes_no cmp -s "$H/.claude/settings.json" "
 chk "hooks.json byte-identical" "$(yes_no cmp -s "$H/.codex/hooks.json" "$S/codex.orig")" yes
 chk "their hook script kept" "$(ls "$H/.claude/hooks")" my-guard.py
 chk "no litter" "$(ls -A "$H/.claude" "$H/.codex" | tr '\n' ' ')" "$H/.claude: hooks settings.json  $H/.codex: hooks.json "
+
+echo "== uninstall warns about a kept backup only when the file really changed"
+home changed
+printf '{"model":"opus"}\n' > "$H/.claude/settings.json"
+chk "install exits 0" "$(install)" 0
+cp "$H/.claude/settings.json.before-agent-config" "$H/.claude/settings.json"
+chk "uninstall exits 0" "$(uninstall)" 0
+chk "no warning for an unchanged file" "$(grep -c 'kept ' "$S/out")" 0
+chk "identical backup removed" "$(yes_no test -e "$H/.claude/settings.json.before-agent-config")" no
+chk "install exits 0" "$(install)" 0
+python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); c.update(hooks={}, theme="dark"); json.dump(c, open(sys.argv[1], "w"))' "$H/.claude/settings.json"
+chk "uninstall exits 0" "$(uninstall)" 0
+chk "warns for a changed file" "$(grep -c 'kept .*settings.json.before-agent-config' "$S/out")" 1
 
 echo "== uninstall on a never-installed HOME changes nothing"
 home never
@@ -107,6 +119,10 @@ chk "Claude settings in custom dir" "$(grep -c 'agent-config-hook-v1' "$S/cc/set
 chk "Codex hooks in custom dir" "$(grep -c 'guard-codex.py' "$S/cx/hooks.json")" 1
 chk "default dirs untouched" "$(ls -A "$H/.claude" "$H/.codex" | tr '\n' ' ')" "$H/.claude:  $H/.codex: "
 chk "check exits 0" "$(install --check)" 0
+echo x > "$S/cc/guard-failopen.log"
+install --check >/dev/null
+chk "fail-open log read from custom dir" "$(grep -c "$S/cc/guard-failopen.log is not empty" "$S/out")" 1
+rm "$S/cc/guard-failopen.log"
 chk "uninstall exits 0" "$(uninstall)" 0
 chk "custom dirs emptied" "$(ls -A "$S/cc" "$S/cx" | tr '\n' ' ')" "$S/cc:  $S/cx: "
 unset CLAUDE_CONFIG_DIR CODEX_HOME

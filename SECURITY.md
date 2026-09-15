@@ -4,7 +4,7 @@ The guard is a safety net against agent mistakes, not a security boundary. Inter
 
 ## Worth reporting
 
-- A command [docs/guard-coverage.md](docs/guard-coverage.md) says is refused, but is allowed. Check [evals/redteam-candidates.txt](evals/redteam-candidates.txt) first; listed gaps are deliberate.
+- A command [docs/guard-coverage.md](docs/guard-coverage.md) says is refused, but is allowed. Check [tests/redteam-candidates.txt](tests/redteam-candidates.txt) first; listed gaps are deliberate.
 - A crash or hang on a shape a rule clearly covers.
 
 A person or agent deliberately working around the guard is not a vulnerability.

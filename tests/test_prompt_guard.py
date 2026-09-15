@@ -31,9 +31,8 @@ POSITIVES = {
     "Stripe restricted key": fake("rk" + "_prod_", 24),
     "Slack bot token": "xo" + "xb-1234567890-1234567890-" + fake("", 24),
     "Slack user token": "xo" + "xp-1234567890-1234567890-1234567890-" + fake("", 32),
-    "Google API key": fake("AI" + "za", 35),
     "npm token": fake("np" + "m_", 36),
-    "private key": "-----BEGIN OPENSSH " + "PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n",
+    "private key": "-----BEGIN OPENSSH " + "PRIVATE KEY-----\n" + fake("b3BlbnNzaC1rZXk", 60) + "\n",
 }
 
 NEGATIVES = {
@@ -45,6 +44,11 @@ NEGATIVES = {
     "Stripe test key": fake("sk" + "_test_", 24),
     "markdown code block": "```python\n" + "def f(x):\n    return hashlib.sha256(x).hexdigest()\n" * 2000 + "```",
     "hello": "hello",
+    "AWS doc example": "AK" + "IAIOSFODNN7EXAMPLE",
+    "Stripe placeholder": "sk" + "_live_" + "x" * 12,
+    "GitHub placeholder": "gh" + "p_" + "x" * 36,
+    "bare PEM header": "-----BEGIN RSA " + "PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
+    "Firebase web config": fake("AI" + "za", 35),
 }
 
 
@@ -84,6 +88,13 @@ class PromptGuardTest(unittest.TestCase):
         with open(os.path.join(self.home.name, ".claude", "guard-failopen.log")) as log:
             text = log.read()
         self.assertNotIn(POSITIVES["GitHub token"], text)
+
+    def test_the_fail_open_log_follows_claude_config_dir(self):
+        config = os.path.join(self.home.name, "cc")
+        subprocess.run([sys.executable, HOOK], input="[1]", capture_output=True, text=True,
+                       env=dict(os.environ, HOME=self.home.name, CLAUDE_CONFIG_DIR=config))
+        self.assertTrue(os.path.exists(os.path.join(config, "guard-failopen.log")))
+        self.assertFalse(os.path.exists(os.path.join(self.home.name, ".claude")))
 
     def test_a_200kb_prompt_is_judged_in_under_50ms(self):
         import importlib.util

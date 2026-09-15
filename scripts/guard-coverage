@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Fill the generated block in docs/guard-coverage.md from the rules.
-
-SECURITY.md defines a reportable bypass as a command the coverage list says is
-refused. That list did not exist, so the criterion pointed at nothing. A
-hand-written one would rot the same way, so the enumerable half is derived here
-and scripts/check-docs fails when the committed file is not what this produces.
-
-Only the derived half. The prose lives in the markdown, where prose belongs.
+"""Fill the generated block in docs/guard-coverage.md from the rule tables.
 
     python3 scripts/guard-coverage            rewrite the generated block
     python3 scripts/guard-coverage --check    exit 1 if it is out of date
@@ -15,7 +8,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "hooks"))
+sys.path[:0] = [os.path.join(ROOT, "hooks"), os.path.join(ROOT, "tests")]
 DOC = os.path.join(ROOT, "docs", "guard-coverage.md")
 BEGIN = "<!-- BEGIN GENERATED: scripts/guard-coverage -->"
 END = "<!-- END GENERATED -->"
