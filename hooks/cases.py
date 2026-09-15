@@ -1300,8 +1300,7 @@ CMD_CASES += [
     ("yarn npm publish", FEAT, True, "irreversible"),
     # yarn's OWN publish, which had no case at all. The `(npm|pnpm|bun)` row
     # catches `yarn npm publish` above, so the suite stayed green with the yarn
-    # row deleted while `yarn publish` walked through. Found by tests/mutate.py,
-    # which is the only thing here that can see a live rule nothing pins.
+    # row deleted while `yarn publish` walked through.
     ("yarn publish", FEAT, True, "irreversible"),
     ("yarn --cwd packages/core publish", FEAT, True, "irreversible"),
     # Same shape again: a live row nothing pinned. The database rules
@@ -2390,7 +2389,6 @@ CMD_CASES += [
     ('if [ -f .env.example ]; then cp .env.example .env.local.tpl; fi', FEAT, False),
     ('test -d node_modules || npm ci', FEAT, False),
     ('python3 hooks/tests.py --no-perf', FEAT, False),
-    ('python3 tests/mutate.py', FEAT, False),
     ('grep -n "DROP TABLE" hooks/guard_rules.py', FEAT, False),
     ('rg "rm -rf" hooks/tests.py', FEAT, False),
     ('git diff hooks/guard_rules.py', FEAT, False),

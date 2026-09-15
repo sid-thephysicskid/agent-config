@@ -74,9 +74,6 @@ def test_every_rule_row_fires_for_some_case():
     already unique, so it identifies the row without a fourth tuple element and
     without 43 edits. A duplicated reason fails here too, which is correct, a
     block message that cannot tell you which rule fired is worth fixing anyway.
-
-    Weaker than tests/mutate.py, which proves a row changes a verdict. That one
-    takes four minutes, so it stays manual and this stands guard in between.
     """
     seen = set()
     for case in CMD_CASES:
@@ -376,8 +373,6 @@ def main():
     # --no-perf runs correctness only. The wall-clock budgets below flake on a
     # loaded machine, and install.sh gates on this suite: an aborted install
     # whose suggested command then prints PASS is a dead end for the adopter.
-    # It also matters for mutation testing: counting a timing flake as a "kill"
-    # made the guard's apparent mutation score roughly twice its real one.
     perf = "--no-perf" not in sys.argv
     guard_git.BLOCK_DIRECT_COMMITS = False
     fails = []
