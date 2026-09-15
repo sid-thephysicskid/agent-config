@@ -47,7 +47,7 @@ _OUR_SHAPE = re.compile(
     r"~/\.claude/hooks/\1; fi; exit 0$")
 _OURS = re.compile(
     r"python3?\s+\S*[./]claude/hooks/"
-    r"(guard-(bash|files)|check-docs|welcome)\.py(\s|;|$)")
+    r"guard-(bash|files)\.py(\s|;|$)")
 
 
 def deny_rules(hook_dir):

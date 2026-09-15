@@ -65,7 +65,7 @@ class MergeTest(Base):
             "if test -f ~/.claude/hooks/guard-bash.py; then exec python3 ~/.claude/hooks/guard-bash.py; fi; exit 0",
             ": onbelay-hook-v1:guard-bash.py; if test -f /x/guard-bash.py; then exec python3 /x/guard-bash.py; fi; exit 0",
             ": agent-config-hook-v1:gone.py; if test -f /x/gone.py; then exec python3 /x/gone.py; fi; exit 0",
-            "python3 ~/.claude/hooks/check-docs.py",
+            "python3 ~/.claude/hooks/guard-files.py",
         ]
         self.write({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
             {"type": "command", "command": c} for c in old]}],

@@ -115,7 +115,7 @@ class CodexHooksTest(unittest.TestCase):
         self.assertIn(theirs, self.commands("PreToolUse"))
 
     def test_an_unrelated_hook_with_the_same_script_name_is_not_removed(self):
-        theirs = H._legacy_command("/opt/not-agent-config", "welcome.py")
+        theirs = H._legacy_command("/opt/not-agent-config", "guard-codex.py")
         self.original["hooks"]["SessionStart"] = [{
             "hooks": [{
                 "type": "command",
@@ -168,7 +168,7 @@ class CodexHooksTest(unittest.TestCase):
     def test_merge_removes_retired_tagged_lifecycle_hooks(self):
         self.original["hooks"]["Stop"] = [{"hooks": [{
             "type": "command",
-            "command": H._command("/old/agent-config", "check-docs.py"),
+            "command": H._command("/old/agent-config", "gone.py"),
             "timeout": 130,
             "statusMessage": "Checking documentation...",
         }]}]
